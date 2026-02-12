@@ -1,0 +1,95 @@
+# Cursor Rules
+
+## 0. Design docs
+
+Design decisions and architecture live in `docs/`. Implementation MUST follow the tech stack and other design docs. See [docs/tech-stack.md](docs/tech-stack.md) for platform, physics, 3D rendering, ML, and data choices.
+
+## 1. MUST Requirements
+
+### 1.1 Simplicity and Clarity
+MUST keep functions under ~20 lines whenever possible
+MUST keep functions short and focused
+MUST prefer simple, obvious approaches over clever ones
+MUST use clear names and consistent patterns
+MUST start with the simplest thing that could work
+
+### 1.2 Explicit Design
+MUST pass dependencies explicitly as parameters when practical
+MUST make configuration values explicit (caller or config)
+MUST name magic numbers instead of scattering literals
+MUST return early to flatten logic and avoid deep nesting
+MUST define variables close to their use
+MUST use explicit event handling over global state
+
+### 1.3 Separation of Concerns
+MUST keep distinct concerns in separate modules/functions
+MUST separate input/event handling from state updates and core logic
+MUST encapsulate features in small, focused units
+MUST use separate files for separate concerns
+
+### 1.4 Failure Handling
+MUST fail loudly and early in development when something's wrong
+MUST use clear error messages rather than silent fallbacks
+MUST validate assumptions where failure would be confusing
+
+### 1.5 Data and State Management
+MUST implement things when they're actually needed (YAGNI)
+MUST delete code when it's no longer used
+MUST minimize mutable state and isolate what remains
+MUST prefer pure functions when possible (easier to test and reason about)
+MUST prefer immutable data for config and constants once loaded
+MUST keep state flow one way (e.g. input → state → output); don't update core state from presentation/render
+
+### 1.6 Development Process
+MUST use PowerShell syntax for terminal commands (NOT bash)
+MUST NOT use `&&` for command chaining (PowerShell uses `;` or separate commands)
+MUST run relevant checks or tests after making changes (e.g. lint, build, tests)
+**NEVER launch a local HTML/server (e.g. `python -m http.server`) for testing unless the user explicitly asks you to.** Ask first if you think a server is needed.
+
+## 2. NEVER Requirements
+
+### 2.1 Complexity and Abstractions
+NEVER implement anything until it's actually needed (YAGNI)
+NEVER add abstractions until you have 3+ real use cases
+NEVER implement features "for later"
+NEVER add unused parameters, methods, or code
+NEVER use clever syntax when simple will do
+
+### 2.2 Defensive Programming
+NEVER write "// Shouldn't happen, but just in case" instead of fixing the cause
+NEVER paper over missing dependencies or failures with fallback code (fail clearly instead)
+NEVER silently swallow errors when a clear failure is better
+
+### 2.3 Hardcoded Values
+NEVER hardcode defaults in places where the caller should decide
+NEVER use magic numbers for thresholds or rates without naming them
+NEVER write placeholder or sample data as if it were real
+
+### 2.4 Bad Practices
+NEVER keep code that isn't actively used
+NEVER maintain legacy codepaths when you've replaced them; remove the old path
+NEVER reach into global state instead of explicit parameters
+NEVER commit API keys or secrets to the codebase
+
+### 2.5 Code Smells
+NEVER allow change amplification (tiny feature touches many files)
+NEVER create unnecessary cognitive load or deep coupling between modules
+NEVER use shared mutable state between unrelated components
+NEVER update the same state from multiple places; prefer a single source of truth
+NEVER store transient or UI-only data in core/persistent state
+NEVER stack control flow into spaghetti
+
+## 3. Windows / Cursor
+
+- Use forward slashes in paths for cross-platform compatibility
+- Use Cursor's built-in terminal for commands
+- Use PowerShell-native commands (New-Item, Copy-Item, etc.) when appropriate
+
+## 4. Comment Markers
+
+Use consistent comment prefixes for inline notes you can grep for:
+- `AIDEV-NOTE:` — explanation or context
+- `AIDEV-TODO:` — work to do
+- `AIDEV-QUESTION:` — open question or uncertainty
+
+Add these when code is complex, important, or might have subtle bugs.

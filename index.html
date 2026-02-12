@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Workout Every Morning</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Setup Overlay (first launch) -->
+    <div id="setup-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h1>Workout Every Morning</h1>
+            <p class="setup-subtitle">Track your cardio with a photo</p>
+
+            <label for="setup-username">Username</label>
+            <input type="text" id="setup-username" class="input" placeholder="Your name" autocomplete="off" spellcheck="false">
+
+            <label for="setup-api-key">OpenAI API Key</label>
+            <input type="password" id="setup-api-key" class="input" placeholder="sk-..." autocomplete="off" spellcheck="false">
+
+            <p id="setup-error" class="error-text hidden"></p>
+
+            <button id="setup-save-btn" class="btn btn-primary">Get Started</button>
+        </div>
+    </div>
+
+    <!-- Settings Overlay (change key / username) -->
+    <div id="settings-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>Settings</h2>
+
+            <label for="settings-username">Username</label>
+            <input type="text" id="settings-username" class="input" autocomplete="off" spellcheck="false">
+
+            <label for="settings-api-key">OpenAI API Key</label>
+            <input type="password" id="settings-api-key" class="input" placeholder="sk-..." autocomplete="off" spellcheck="false">
+
+            <p id="settings-error" class="error-text hidden"></p>
+
+            <div class="settings-buttons">
+                <button id="settings-save-btn" class="btn btn-primary">Save</button>
+                <button id="settings-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Header -->
+    <header class="app-header">
+        <h1 class="app-title">Workout Every Morning</h1>
+        <button id="settings-btn" class="icon-btn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+        </button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-content">
+
+        <!-- Log Screen -->
+        <section id="screen-log" class="screen">
+            <div id="capture-idle" class="capture-state">
+                <p class="capture-prompt">Snap a photo of your cardio machine screen</p>
+                <label class="btn btn-large btn-primary" for="photo-input">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    Log Workout
+                </label>
+                <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden">
+            </div>
+
+            <div id="capture-loading" class="capture-state hidden">
+                <div class="spinner"></div>
+                <p>Analyzing your workout...</p>
+            </div>
+
+            <div id="capture-result" class="capture-state hidden">
+                <div id="result-card" class="workout-card">
+                    <!-- Filled dynamically by capture.js -->
+                </div>
+                <div class="date-picker-row">
+                    <label for="workout-date">Workout Date</label>
+                    <input type="date" id="workout-date" class="input">
+                </div>
+                <div class="result-actions">
+                    <button id="save-workout-btn" class="btn btn-primary">Save Workout</button>
+                    <button id="retake-btn" class="btn btn-secondary">Retake</button>
+                </div>
+            </div>
+
+            <div id="capture-error" class="capture-state hidden">
+                <p id="capture-error-msg" class="error-text"></p>
+                <button id="error-retry-btn" class="btn btn-secondary">Try Again</button>
+            </div>
+
+            <div id="capture-saved" class="capture-state hidden">
+                <div class="saved-check">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <p>Workout saved!</p>
+                <button id="log-another-btn" class="btn btn-primary">Log Another</button>
+            </div>
+        </section>
+
+        <!-- History Screen -->
+        <section id="screen-history" class="screen hidden">
+            <div class="history-controls">
+                <select id="metric-select" class="select">
+                    <option value="calories">Calories</option>
+                    <option value="distanceMiles">Distance (mi)</option>
+                    <option value="elapsedTimeSeconds">Duration</option>
+                    <option value="avgSpeedMph">Avg Speed (mph)</option>
+                    <option value="avgHeartRate">Avg Heart Rate</option>
+                </select>
+                <select id="range-select" class="select">
+                    <option value="7">1 Week</option>
+                    <option value="30" selected>1 Month</option>
+                    <option value="90">3 Months</option>
+                    <option value="180">6 Months</option>
+                    <option value="365">1 Year</option>
+                    <option value="0">All Time</option>
+                </select>
+            </div>
+            <div class="chart-container">
+                <canvas id="history-chart"></canvas>
+            </div>
+            <div id="workout-list" class="workout-list">
+                <!-- Filled dynamically by history.js -->
+            </div>
+            <p id="history-empty" class="empty-text hidden">No workouts yet. Go log one!</p>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-tab active" data-screen="screen-log">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Log</span>
+        </button>
+        <button class="nav-tab" data-screen="screen-history">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            <span>History</span>
+        </button>
+    </nav>
+
+    <!-- Firebase SDK (compat mode for CDN usage) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+    <!-- App modules -->
+    <script type="module" src="src/app.js"></script>
+
+</body>
+</html>

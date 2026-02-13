@@ -122,17 +122,16 @@
                     <option value="avgSpeedMph">Avg Speed (mph)</option>
                     <option value="avgHeartRate">Avg Heart Rate</option>
                 </select>
-                <select id="range-select" class="select">
-                    <option value="7">1 Week</option>
-                    <option value="30" selected>1 Month</option>
-                    <option value="90">3 Months</option>
-                    <option value="180">6 Months</option>
-                    <option value="365">1 Year</option>
-                    <option value="0">All Time</option>
+                <select id="granularity-select" class="select">
+                    <option value="daily">Daily</option>
+                    <option value="weekly" selected>Weekly</option>
+                    <option value="monthly">Monthly</option>
                 </select>
             </div>
-            <div class="chart-container">
-                <canvas id="history-chart"></canvas>
+            <div class="chart-container" id="chart-container">
+                <div id="chart-scroll-area">
+                    <canvas id="history-chart"></canvas>
+                </div>
             </div>
             <div id="workout-list" class="workout-list">
                 <!-- Filled dynamically by history.js -->

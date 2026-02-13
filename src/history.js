@@ -1,21 +1,26 @@
 import { queryWorkouts } from './firebase.js';
-import { show, hide, daysAgo, formatDuration, formatPace, formatNum } from './utils.js';
+import { show, hide, formatDuration, formatNum } from './utils.js';
 
 // DOM refs
-let metricSelect, rangeSelect, chartCanvas, workoutListEl, emptyEl;
+let metricSelect, granularitySelect, chartCanvas, chartContainer, chartScrollArea;
+let workoutListEl, emptyEl;
 let chart = null;
 
 // Cached workouts from last query
 let cachedWorkouts = [];
 
-// Selection state: which bar index is selected, and the dateKey for each bar
+// Per-bar state for selection and detail
 let selectedIndex = -1;
-let seriesDateKeys = [];
+let workoutByDate = new Map(); // dateKey -> workout
+let bucketWorkouts = [];       // workouts[] per bar
+let bucketRanges = [];         // { start: Date, end: Date } per bar
 
-// Map dateKey -> workout for quick lookup
-let workoutByDate = new Map();
+// --- Named constants -------------------------------------------------------
 
-// --- Metric display config ---------------------------------------------
+const DAYS_PER_WEEK = 7;
+const MIN_BAR_WIDTH_PX = 28;
+
+// --- Metric display config -------------------------------------------------
 
 const METRIC_CONFIG = {
     calories: {
@@ -33,7 +38,7 @@ const METRIC_CONFIG = {
     elapsedTimeSeconds: {
         label: 'Duration',
         color: '#a78bfa',
-        getValue: (w) => w.elapsedTimeSeconds / 60, // display as minutes
+        getValue: (w) => w.elapsedTimeSeconds / 60,
         format: (v) => formatDuration(v * 60),
         yLabel: 'Minutes',
     },
@@ -51,46 +56,33 @@ const METRIC_CONFIG = {
     },
 };
 
-// --- Public API --------------------------------------------------------
+// --- Public API ------------------------------------------------------------
 
 export function initHistory() {
     metricSelect = document.getElementById('metric-select');
-    rangeSelect = document.getElementById('range-select');
+    granularitySelect = document.getElementById('granularity-select');
     chartCanvas = document.getElementById('history-chart');
+    chartContainer = document.getElementById('chart-container');
+    chartScrollArea = document.getElementById('chart-scroll-area');
     workoutListEl = document.getElementById('workout-list');
     emptyEl = document.getElementById('history-empty');
 
-    metricSelect.addEventListener('change', onControlsChanged);
-    rangeSelect.addEventListener('change', onControlsChanged);
+    metricSelect.addEventListener('change', renderChart);
+    granularitySelect.addEventListener('change', renderChart);
 }
 
-/**
- * Refresh history data from Firestore and redraw the chart + list.
- */
+/** Refresh history data from Firestore and redraw. */
 export async function refreshHistory() {
-    const rangeDays = parseInt(rangeSelect.value, 10);
-    const since = rangeDays > 0 ? daysAgo(rangeDays) : null;
-
     try {
-        cachedWorkouts = await queryWorkouts(since);
+        cachedWorkouts = await queryWorkouts(null);
     } catch (err) {
         console.error('Failed to load workouts:', err);
         cachedWorkouts = [];
     }
-
     renderChart();
 }
 
-// --- Internal ----------------------------------------------------------
-
-function onControlsChanged() {
-    // Range change needs a fresh query; metric change only needs a re-render
-    if (document.activeElement === rangeSelect) {
-        refreshHistory();
-    } else {
-        renderChart();
-    }
-}
+// --- Rendering -------------------------------------------------------------
 
 function renderChart() {
     const metricKey = metricSelect.value;
@@ -102,80 +94,149 @@ function renderChart() {
     if (cachedWorkouts.length === 0) {
         show(emptyEl);
         hide(workoutListEl);
+        chartScrollArea.style.width = '100%';
         chart = createChart(chartCanvas, [], [], config);
         return;
     }
 
     hide(emptyEl);
     show(workoutListEl);
+    populateWorkoutByDate();
 
-    const { labels, data } = buildDailySeries(config);
+    const { labels, data } = buildSeries(config);
+    updateScrollWidth(labels.length);
 
-    // Default selection to the most recent day that has a workout
-    selectedIndex = findLastWorkoutIndex();
+    selectedIndex = findLastBucketWithWorkout();
     chart = createChart(chartCanvas, labels, data, config);
+    chartContainer.scrollLeft = chartContainer.scrollWidth;
     renderDetail();
 }
 
-/** Fill every calendar day in the range, using 0 for missed days. */
-function buildDailySeries(config) {
-    const rangeDays = parseInt(rangeSelect.value, 10);
-    const sorted = [...cachedWorkouts].reverse(); // oldest-first
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+function renderDetail() {
+    if (selectedIndex < 0) {
+        workoutListEl.innerHTML = '';
+        return;
+    }
+    const workouts = bucketWorkouts[selectedIndex];
+    const range = bucketRanges[selectedIndex];
 
-    // Build dateKey -> workout map (shared state for detail panel)
+    if (!workouts || workouts.length === 0) {
+        workoutListEl.innerHTML = '';
+        return;
+    }
+
+    const granularity = granularitySelect.value;
+    if (granularity === 'daily') {
+        workoutListEl.innerHTML = workoutCardHTML(workouts[0]);
+    } else {
+        workoutListEl.innerHTML = averageCardHTML(workouts, range);
+    }
+}
+
+// --- Series building -------------------------------------------------------
+
+function populateWorkoutByDate() {
     workoutByDate = new Map();
-    for (const w of sorted) {
+    for (const w of cachedWorkouts) {
         const key = dateKey(w.timestamp);
         if (!workoutByDate.has(key)) workoutByDate.set(key, w);
     }
+}
 
-    const start = rangeDays > 0 ? daysAgo(rangeDays) : new Date(sorted[0].timestamp);
+function buildSeries(config) {
+    const sorted = [...cachedWorkouts].reverse();
+    const start = new Date(sorted[0].timestamp);
     start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(0, 0, 0, 0);
 
-    const labels = [];
-    const data = [];
-    seriesDateKeys = [];
-    for (const d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+    const granularity = granularitySelect.value;
+    if (granularity === 'weekly') return buildWeekly(config, start, end);
+    if (granularity === 'monthly') return buildMonthly(config, start, end);
+    return buildDaily(config, start, end);
+}
+
+function buildDaily(config, start, end) {
+    const labels = [], data = [];
+    bucketWorkouts = [];
+    bucketRanges = [];
+
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const key = dateKey(d);
-        labels.push(formatChartDate(d));
-        data.push(workoutByDate.has(key) ? (config.getValue(workoutByDate.get(key)) ?? 0) : 0);
-        seriesDateKeys.push(key);
+        const w = workoutByDate.get(key);
+        labels.push(formatDayLabel(d));
+        data.push(w ? (config.getValue(w) ?? 0) : 0);
+        bucketWorkouts.push(w ? [w] : []);
+        bucketRanges.push({ start: new Date(d), end: new Date(d) });
     }
     return { labels, data };
 }
 
-function dateKey(d) {
-    if (!(d instanceof Date)) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-}
+function buildWeekly(config, start, end) {
+    const labels = [], data = [];
+    bucketWorkouts = [];
+    bucketRanges = [];
 
-/** Find the last bar index that has a workout. */
-function findLastWorkoutIndex() {
-    for (let i = seriesDateKeys.length - 1; i >= 0; i--) {
-        if (workoutByDate.has(seriesDateKeys[i])) return i;
+    for (const cur = alignToMonday(start); cur <= end; cur.setDate(cur.getDate() + DAYS_PER_WEEK)) {
+        const weekEnd = new Date(cur);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        const { workouts, sum } = collectBucket(cur, weekEnd, config.getValue);
+
+        labels.push(formatDayLabel(cur));
+        data.push(sum / DAYS_PER_WEEK);
+        bucketWorkouts.push(workouts);
+        bucketRanges.push({ start: new Date(cur), end: weekEnd });
     }
-    return seriesDateKeys.length - 1;
+    return { labels, data };
 }
 
-/** Chart.js plugin: draw a thin vertical line over the selected bar. */
+function buildMonthly(config, start, end) {
+    const labels = [], data = [];
+    bucketWorkouts = [];
+    bucketRanges = [];
+
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cursor <= end) {
+        const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+        const { workouts, sum } = collectBucket(cursor, monthEnd, config.getValue);
+
+        labels.push(formatMonthLabel(cursor));
+        data.push(sum / monthEnd.getDate());
+        bucketWorkouts.push(workouts);
+        bucketRanges.push({ start: new Date(cursor), end: monthEnd });
+        cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return { labels, data };
+}
+
+/** Collect workouts and metric sum for a date range. */
+function collectBucket(start, end, getValue) {
+    const workouts = [];
+    let sum = 0;
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const w = workoutByDate.get(dateKey(d));
+        if (w) {
+            workouts.push(w);
+            sum += getValue(w) ?? 0;
+        }
+    }
+    return { workouts, sum };
+}
+
+// --- Chart -----------------------------------------------------------------
+
+/** Chart.js plugin: thin vertical line on selected bar. */
 const selectionLinePlugin = {
     id: 'selectionLine',
     afterDatasetsDraw(chart) {
         if (selectedIndex < 0) return;
-        const meta = chart.getDatasetMeta(0);
-        const bar = meta.data[selectedIndex];
+        const bar = chart.getDatasetMeta(0).data[selectedIndex];
         if (!bar) return;
 
         const { ctx, chartArea } = chart;
-        const LINE_WIDTH = 2;
         ctx.save();
         ctx.strokeStyle = '#ffffffcc';
-        ctx.lineWidth = LINE_WIDTH;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(bar.x, chartArea.top);
         ctx.lineTo(bar.x, chartArea.bottom);
@@ -189,17 +250,15 @@ function createChart(canvas, labels, data, config) {
         type: 'bar',
         data: {
             labels,
-            datasets: [
-                {
-                    label: config.label,
-                    data,
-                    backgroundColor: config.color + 'cc',
-                    borderColor: config.color,
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    minBarLength: 1,
-                },
-            ],
+            datasets: [{
+                label: config.label,
+                data,
+                backgroundColor: config.color + 'cc',
+                borderColor: config.color,
+                borderWidth: 1,
+                borderRadius: 4,
+                minBarLength: 1,
+            }],
         },
         plugins: [selectionLinePlugin],
         options: {
@@ -209,9 +268,7 @@ function createChart(canvas, labels, data, config) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    callbacks: {
-                        label: (ctx) => config.format(ctx.parsed.y),
-                    },
+                    callbacks: { label: (ctx) => config.format(ctx.parsed.y) },
                 },
             },
             scales: {
@@ -234,19 +291,54 @@ function createChart(canvas, labels, data, config) {
     });
 }
 
+function updateScrollWidth(barCount) {
+    const containerWidth = chartContainer.clientWidth;
+    const needed = barCount * MIN_BAR_WIDTH_PX;
+    chartScrollArea.style.width = needed > containerWidth ? `${needed}px` : '100%';
+}
+
 function onChartClick(_event, elements) {
     if (elements.length === 0) return;
     selectedIndex = elements[0].index;
-    chart.update('none'); // redraw selection line without animation
+    chart.update('none');
     renderDetail();
 }
 
-/** Show a single workout card for the selected day, or nothing for a missed day. */
-function renderDetail() {
-    const key = seriesDateKeys[selectedIndex];
-    const workout = key ? workoutByDate.get(key) : null;
-    workoutListEl.innerHTML = workout ? workoutCardHTML(workout) : '';
+// --- Helpers ---------------------------------------------------------------
+
+function alignToMonday(date) {
+    const d = new Date(date);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d;
 }
+
+function dateKey(d) {
+    if (!(d instanceof Date)) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function findLastBucketWithWorkout() {
+    for (let i = bucketWorkouts.length - 1; i >= 0; i--) {
+        if (bucketWorkouts[i].length > 0) return i;
+    }
+    return bucketWorkouts.length - 1;
+}
+
+/** Average a field across workouts, skipping nulls. Returns null if none. */
+function avgOf(workouts, fn) {
+    const vals = workouts.map(fn).filter((v) => v != null);
+    if (vals.length === 0) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+function daySpan(start, end) {
+    return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+// --- Card templates --------------------------------------------------------
 
 function workoutCardHTML(w) {
     const date = w.timestamp instanceof Date
@@ -270,6 +362,28 @@ function workoutCardHTML(w) {
     `;
 }
 
+function averageCardHTML(workouts, range) {
+    const total = daySpan(range.start, range.end);
+    const label = formatRangeLabel(range);
+
+    return `
+        <div class="workout-card">
+            <div class="card-header">
+                <span class="workout-date">${label}</span>
+                <span class="field-label">${workouts.length} of ${total} days</span>
+            </div>
+            <div class="card-fields">
+                ${fieldHTML('Avg Duration', formatDuration(avgOf(workouts, (w) => w.elapsedTimeSeconds)))}
+                ${fieldHTML('Avg Calories', formatNum(avgOf(workouts, (w) => w.calories)))}
+                ${fieldHTML('Avg Distance', formatNum(avgOf(workouts, (w) => w.distanceMiles), 'mi'))}
+                ${fieldHTML('Avg Speed', formatNum(avgOf(workouts, (w) => w.avgSpeedMph), 'mph'))}
+                ${fieldHTML('Avg Heart Rate', avgOf(workouts, (w) => w.avgHeartRate) != null
+                    ? `${Math.round(avgOf(workouts, (w) => w.avgHeartRate))} bpm` : '--')}
+            </div>
+        </div>
+    `;
+}
+
 function fieldHTML(label, value) {
     return `
         <div class="field">
@@ -279,7 +393,20 @@ function fieldHTML(label, value) {
     `;
 }
 
-function formatChartDate(date) {
+// --- Date formatting -------------------------------------------------------
+
+function formatDayLabel(date) {
     if (!(date instanceof Date)) return '';
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function formatMonthLabel(date) {
+    if (!(date instanceof Date)) return '';
+    return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
+
+function formatRangeLabel(range) {
+    const s = range.start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const e = range.end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${s} – ${e}`;
 }

@@ -7,7 +7,7 @@ import {
     show, hide,
 } from './utils.js';
 
-let photoInput, idleEl, loadingEl, reviewEl, errorEl, savedEl;
+let photoInputCamera, photoInputLibrary, idleEl, loadingEl, reviewEl, errorEl, savedEl;
 let reviewListEl, errorMsg, dateInput;
 let saveBtn, retakeBtn, retryBtn, logAnotherBtn;
 let metricSelect, chartCanvas, chartContainer, chartScrollArea, emptyEl;
@@ -23,7 +23,8 @@ const DEFAULT_TRACKED_STATS = [
 ];
 
 export function initHealth() {
-    photoInput = document.getElementById('health-photo-input');
+    photoInputCamera = document.getElementById('health-photo-input-camera');
+    photoInputLibrary = document.getElementById('health-photo-input-library');
     idleEl = document.getElementById('health-idle');
     loadingEl = document.getElementById('health-loading');
     reviewEl = document.getElementById('health-review');
@@ -42,7 +43,8 @@ export function initHealth() {
     chartScrollArea = document.getElementById('health-chart-scroll-area');
     emptyEl = document.getElementById('health-empty');
 
-    photoInput.addEventListener('change', onPhotoSelected);
+    photoInputCamera.addEventListener('change', onPhotoSelected);
+    photoInputLibrary.addEventListener('change', onPhotoSelected);
     saveBtn.addEventListener('click', onSave);
     retakeBtn.addEventListener('click', resetHealthToIdle);
     retryBtn.addEventListener('click', resetHealthToIdle);
@@ -69,13 +71,15 @@ export async function refreshHealth() {
 
 export function resetHealthToIdle() {
     pendingReviewRows = [];
-    photoInput.value = '';
+    photoInputCamera.value = '';
+    photoInputLibrary.value = '';
     reviewListEl.innerHTML = '';
     showState(idleEl);
 }
 
-async function onPhotoSelected() {
-    const file = photoInput.files?.[0];
+async function onPhotoSelected(event) {
+    const fileInput = event?.currentTarget;
+    const file = fileInput?.files?.[0];
     if (!file) return;
     showState(loadingEl);
 

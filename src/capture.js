@@ -11,7 +11,7 @@ import {
 } from './machineType.js';
 
 // DOM refs (cached on init)
-let photoInput, idleEl, loadingEl, resultEl, errorEl, savedEl;
+let photoInputCamera, photoInputLibrary, idleEl, loadingEl, resultEl, errorEl, savedEl;
 let resultCard, errorMsg, dateInput, machineTypeSelect;
 let saveBtn, retakeBtn, retryBtn, logAnotherBtn;
 
@@ -21,7 +21,8 @@ let pendingExtraction = null;
 // --- Public API --------------------------------------------------------
 
 export function initCapture() {
-    photoInput = document.getElementById('photo-input');
+    photoInputCamera = document.getElementById('photo-input-camera');
+    photoInputLibrary = document.getElementById('photo-input-library');
     idleEl = document.getElementById('capture-idle');
     loadingEl = document.getElementById('capture-loading');
     resultEl = document.getElementById('capture-result');
@@ -37,7 +38,8 @@ export function initCapture() {
     retryBtn = document.getElementById('error-retry-btn');
     logAnotherBtn = document.getElementById('log-another-btn');
 
-    photoInput.addEventListener('change', onPhotoSelected);
+    photoInputCamera.addEventListener('change', onPhotoSelected);
+    photoInputLibrary.addEventListener('change', onPhotoSelected);
     machineTypeSelect.addEventListener('change', onMachineTypeChanged);
     saveBtn.addEventListener('click', onSave);
     retakeBtn.addEventListener('click', resetToIdle);
@@ -50,15 +52,17 @@ export function initCapture() {
  */
 export function resetToIdle() {
     pendingExtraction = null;
-    photoInput.value = '';
+    photoInputCamera.value = '';
+    photoInputLibrary.value = '';
     machineTypeSelect.value = MACHINE_TYPES.TREADMILL;
     showState(idleEl);
 }
 
 // --- Internal ----------------------------------------------------------
 
-async function onPhotoSelected() {
-    const file = photoInput.files?.[0];
+async function onPhotoSelected(event) {
+    const fileInput = event?.currentTarget;
+    const file = fileInput?.files?.[0];
     if (!file) return;
 
     showState(loadingEl);

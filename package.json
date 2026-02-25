@@ -1,0 +1,30 @@
+{
+  "name": "workouteverymorning",
+  "version": "1.0.0",
+  "description": "A mobile-first web app for tracking cardio workouts by photographing your machine's display screen.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "machine-type:backup": "node ./scripts/firestore-backup-workouts.mjs",
+    "machine-type:migrate": "node ./scripts/firestore-set-machine-type.mjs",
+    "machine-type:migrate:dry": "node ./scripts/firestore-set-machine-type.mjs --dry-run",
+    "machine-type:report": "node ./scripts/firestore-machine-type-report.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EricTams/WorkoutEveryMorning.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/EricTams/WorkoutEveryMorning/issues"
+  },
+  "homepage": "https://github.com/EricTams/WorkoutEveryMorning#readme",
+  "dependencies": {
+    "firebase-admin": "^13.6.1"
+  }
+}

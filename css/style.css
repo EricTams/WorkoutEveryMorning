@@ -254,6 +254,116 @@ html, body {
     flex-direction: column;
 }
 
+/* --- Home Screen --- */
+.home-hero {
+    margin-bottom: 16px;
+}
+
+.home-hero h2 {
+    font-size: 1.35rem;
+    margin-bottom: 6px;
+}
+
+.home-hero p {
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.home-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.home-action {
+    min-height: 84px;
+    border-radius: var(--radius);
+    font-size: 1rem;
+}
+
+/* --- Dashboard Screen --- */
+.dashboard-header {
+    margin-bottom: 14px;
+}
+
+.dashboard-header h2 {
+    font-size: 1.35rem;
+    margin-bottom: 4px;
+}
+
+.dashboard-subtitle {
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.dashboard-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 16px;
+}
+
+.dashboard-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 14px;
+}
+
+.dashboard-card h3 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+.dashboard-metric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.dashboard-card .field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dashboard-card .field-label {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.dashboard-card .field-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.dashboard-chart-wrap {
+    height: 220px;
+}
+
+/* --- Coming Soon Placeholder --- */
+.coming-soon-card {
+    margin: auto;
+    width: 100%;
+    max-width: 420px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 24px 18px;
+    text-align: center;
+}
+
+.coming-soon-card h2 {
+    margin-bottom: 10px;
+}
+
+.coming-soon-card p {
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+}
+
 /* --- Capture States --- */
 .capture-state {
     flex: 1;
@@ -382,6 +492,12 @@ html, body {
     margin-bottom: 16px;
 }
 
+.health-controls {
+    display: flex;
+    gap: 10px;
+    margin: 8px 0 16px;
+}
+
 /* --- Chart Container --- */
 .chart-container {
     width: 100%;
@@ -401,6 +517,16 @@ html, body {
 }
 
 #chart-scroll-area canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#health-chart-scroll-area {
+    min-width: 100%;
+    height: 100%;
+}
+
+#health-chart-scroll-area canvas {
     width: 100% !important;
     height: 100% !important;
 }
@@ -433,6 +559,56 @@ html, body {
     font-size: 0.95rem;
 }
 
+.health-review-list {
+    width: 100%;
+    max-width: 700px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.health-review-row {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    text-align: left;
+}
+
+.health-row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.health-row-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.health-match-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+}
+
+.health-match-exact {
+    color: #93c5fd;
+}
+
+.health-match-close {
+    color: #fcd34d;
+}
+
+.health-match-new {
+    color: #fca5a5;
+}
+
 /* --- Bottom Nav --- */
 .bottom-nav {
     position: fixed;
@@ -456,7 +632,7 @@ html, body {
     background: none;
     border: none;
     color: var(--color-text-secondary);
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     font-family: var(--font);
     font-weight: 600;
     cursor: pointer;

@@ -1,5 +1,6 @@
 import { queryWorkouts } from './firebase.js';
 import { show, hide, formatDuration, formatNum } from './utils.js';
+import { machineTypeColor, machineTypeLabel, normalizeMachineType } from './machineType.js';
 
 // DOM refs
 let metricSelect, granularitySelect, chartCanvas, chartContainer, chartScrollArea;
@@ -104,10 +105,11 @@ function renderChart() {
     populateWorkoutByDate();
 
     const { labels, data } = buildSeries(config);
+    const barColors = buildBarColors();
     updateScrollWidth(labels.length);
 
     selectedIndex = findLastBucketWithWorkout();
-    chart = createChart(chartCanvas, labels, data, config);
+    chart = createChart(chartCanvas, labels, data, config, barColors);
     chartContainer.scrollLeft = chartContainer.scrollWidth;
     renderDetail();
 }
@@ -245,7 +247,7 @@ const selectionLinePlugin = {
     },
 };
 
-function createChart(canvas, labels, data, config) {
+function createChart(canvas, labels, data, config, barColors = null) {
     return new Chart(canvas, {
         type: 'bar',
         data: {
@@ -253,8 +255,8 @@ function createChart(canvas, labels, data, config) {
             datasets: [{
                 label: config.label,
                 data,
-                backgroundColor: config.color + 'cc',
-                borderColor: config.color,
+                backgroundColor: barColors?.background || (config.color + 'cc'),
+                borderColor: barColors?.border || config.color,
                 borderWidth: 1,
                 borderRadius: 4,
                 minBarLength: 1,
@@ -304,6 +306,45 @@ function onChartClick(_event, elements) {
     renderDetail();
 }
 
+function buildBarColors() {
+    const background = [];
+    const border = [];
+
+    for (const workouts of bucketWorkouts) {
+        const type = dominantMachineType(workouts);
+        const color = machineTypeColor(type);
+        background.push(withAlpha(color, 'cc'));
+        border.push(color);
+    }
+
+    return { background, border };
+}
+
+function dominantMachineType(workouts) {
+    if (!workouts || workouts.length === 0) return null;
+
+    const counts = new Map();
+    for (const workout of workouts) {
+        const type = normalizeMachineType(workout.machineType) || 'unknown';
+        counts.set(type, (counts.get(type) || 0) + 1);
+    }
+
+    let bestType = null;
+    let bestCount = -1;
+    for (const [type, count] of counts.entries()) {
+        if (count > bestCount) {
+            bestType = type;
+            bestCount = count;
+        }
+    }
+    return bestType;
+}
+
+function withAlpha(hexColor, alphaHex) {
+    if (typeof hexColor !== 'string') return hexColor;
+    return /^#[0-9a-fA-F]{6}$/.test(hexColor) ? `${hexColor}${alphaHex}` : hexColor;
+}
+
 // --- Helpers ---------------------------------------------------------------
 
 function alignToMonday(date) {
@@ -348,6 +389,7 @@ function workoutCardHTML(w) {
     return `
         <div class="workout-card">
             <div class="card-header">
+                <span class="machine-type">${machineTypeLabel(w.machineType)}</span>
                 <span class="workout-date">${date}</span>
             </div>
             <div class="card-fields">

@@ -4,10 +4,15 @@ import {
     readFileAsDataURL, resizeImage, extractPhotoDate, toDateInputValue,
     show, hide, formatDuration, formatPace, formatNum,
 } from './utils.js';
+import {
+    MACHINE_TYPES,
+    machineTypeLabel,
+    resolveMachineType,
+} from './machineType.js';
 
 // DOM refs (cached on init)
 let photoInput, idleEl, loadingEl, resultEl, errorEl, savedEl;
-let resultCard, errorMsg, dateInput;
+let resultCard, errorMsg, dateInput, machineTypeSelect;
 let saveBtn, retakeBtn, retryBtn, logAnotherBtn;
 
 // Holds the most recent extraction so Save can persist it
@@ -25,6 +30,7 @@ export function initCapture() {
     resultCard = document.getElementById('result-card');
     errorMsg = document.getElementById('capture-error-msg');
     dateInput = document.getElementById('workout-date');
+    machineTypeSelect = document.getElementById('workout-machine-type');
 
     saveBtn = document.getElementById('save-workout-btn');
     retakeBtn = document.getElementById('retake-btn');
@@ -32,6 +38,7 @@ export function initCapture() {
     logAnotherBtn = document.getElementById('log-another-btn');
 
     photoInput.addEventListener('change', onPhotoSelected);
+    machineTypeSelect.addEventListener('change', onMachineTypeChanged);
     saveBtn.addEventListener('click', onSave);
     retakeBtn.addEventListener('click', resetToIdle);
     retryBtn.addEventListener('click', resetToIdle);
@@ -44,6 +51,7 @@ export function initCapture() {
 export function resetToIdle() {
     pendingExtraction = null;
     photoInput.value = '';
+    machineTypeSelect.value = MACHINE_TYPES.TREADMILL;
     showState(idleEl);
 }
 
@@ -64,9 +72,14 @@ async function onPhotoSelected() {
 
         const resized = await resizeImage(dataURL);
         const extraction = await extractWorkoutFromImage(resized);
-        pendingExtraction = extraction;
+        const resolvedMachineType = resolveMachineType(extraction);
+        pendingExtraction = {
+            ...extraction,
+            machineType: resolvedMachineType,
+        };
+        machineTypeSelect.value = resolvedMachineType;
         dateInput.value = toDateInputValue(photoDate);
-        renderResultCard(extraction);
+        renderResultCard(pendingExtraction);
         showState(resultEl);
     } catch (err) {
         console.error('Capture extraction failed:', err);
@@ -85,7 +98,8 @@ async function onSave() {
         const workoutDate = dateInput.value
             ? new Date(dateInput.value + 'T12:00:00')
             : new Date();
-        await saveWorkout(pendingExtraction, workoutDate);
+        const selectedMachineType = machineTypeSelect.value;
+        await saveWorkout(pendingExtraction, workoutDate, selectedMachineType);
         pendingExtraction = null;
         showState(savedEl);
     } catch (err) {
@@ -115,7 +129,7 @@ function showState(active) {
 function renderResultCard(data) {
     resultCard.innerHTML = `
         <div class="card-header">
-            <span class="machine-type">Workout</span>
+            <span class="machine-type">${machineTypeLabel(data.machineType)}</span>
         </div>
         <div class="card-fields">
             ${field('Duration', formatDuration(data.elapsedTimeSeconds))}
@@ -127,6 +141,15 @@ function renderResultCard(data) {
             ${field('Heart Rate', data.avgHeartRate != null ? `${data.avgHeartRate} bpm` : '--')}
         </div>
     `;
+}
+
+function onMachineTypeChanged() {
+    if (!pendingExtraction) return;
+    pendingExtraction = {
+        ...pendingExtraction,
+        machineType: machineTypeSelect.value,
+    };
+    renderResultCard(pendingExtraction);
 }
 
 function field(label, value) {

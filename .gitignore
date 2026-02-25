@@ -1,0 +1,6 @@
+node_modules/
+*.log
+
+# Local Firebase credentials for admin scripts
+service-account*.json
+firebase-service-account*.json

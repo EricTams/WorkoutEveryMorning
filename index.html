@@ -48,6 +48,31 @@
         </div>
     </div>
 
+    <!-- Activity Overlay -->
+    <div id="activity-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>Add Activity</h2>
+
+            <label for="activity-date">Date</label>
+            <input type="date" id="activity-date" class="input">
+
+            <label for="activity-select">Activity</label>
+            <select id="activity-select" class="select"></select>
+
+            <div id="activity-new-name-row" class="hidden">
+                <label for="activity-new-name">New activity name</label>
+                <input type="text" id="activity-new-name" class="input" placeholder="PT, Boxing, EMS..." autocomplete="off" spellcheck="false">
+            </div>
+
+            <p id="activity-error" class="error-text hidden"></p>
+
+            <div class="settings-buttons">
+                <button id="activity-save-btn" class="btn btn-primary">Save Activity</button>
+                <button id="activity-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- App Header -->
     <header class="app-header">
         <h1 class="app-title">Workout Every Morning</h1>
@@ -137,6 +162,32 @@
                     </div>
                 </div>
 
+                <div class="dashboard-card">
+                    <div class="dashboard-card-head">
+                        <h3>Calendar (4 Weeks)</h3>
+                        <button class="btn btn-secondary btn-small" data-target-screen="screen-activity-calendar">
+                            Open
+                        </button>
+                    </div>
+                    <button class="calendar-widget-btn" data-target-screen="screen-activity-calendar">
+                        <div id="dashboard-calendar-grid" class="calendar-grid calendar-grid-summary"></div>
+                    </button>
+                    <p class="calendar-legend">
+                        <span class="calendar-legend-item">
+                            <span class="calendar-marker calendar-marker-workout-a"></span>
+                            <span class="calendar-marker calendar-marker-workout-b"></span>
+                            <span class="calendar-marker calendar-marker-workout-c"></span>
+                            Workouts
+                        </span>
+                        <span class="calendar-legend-item">
+                            <span class="calendar-marker calendar-marker-activity-a"></span>
+                            <span class="calendar-marker calendar-marker-activity-b"></span>
+                            <span class="calendar-marker calendar-marker-activity-c"></span>
+                            Activities
+                        </span>
+                    </p>
+                </div>
+
                 <button class="btn btn-secondary" data-target-screen="screen-history">
                     Open History
                 </button>
@@ -205,6 +256,31 @@
                 <p>Workout saved!</p>
                 <button id="log-another-btn" class="btn btn-primary">Log Another</button>
             </div>
+        </section>
+
+        <!-- Activity Calendar Screen -->
+        <section id="screen-activity-calendar" class="screen hidden">
+            <div class="dashboard-header">
+                <h2>Activity Calendar</h2>
+                <p class="dashboard-subtitle">Tap a day to add an activity entry</p>
+            </div>
+            <div id="activity-calendar-grid" class="calendar-grid calendar-grid-zoom"></div>
+            <p id="activity-calendar-empty" class="empty-text hidden">No workouts or activities in the last 4 weeks yet.</p>
+            <p class="calendar-legend">
+                <span class="calendar-legend-item">
+                    <span class="calendar-marker calendar-marker-workout-a"></span>
+                    <span class="calendar-marker calendar-marker-workout-b"></span>
+                    <span class="calendar-marker calendar-marker-workout-c"></span>
+                    Workouts
+                </span>
+                <span class="calendar-legend-item">
+                    <span class="calendar-marker calendar-marker-activity-a"></span>
+                    <span class="calendar-marker calendar-marker-activity-b"></span>
+                    <span class="calendar-marker calendar-marker-activity-c"></span>
+                    Activities
+                </span>
+            </p>
+            <button class="btn btn-secondary" data-target-screen="screen-dashboard">Back to Dashboard</button>
         </section>
 
         <!-- History Screen -->

@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
     username: 'wem_username',
     apiKey: 'wem_openai_key',
     healthTrackedStats: 'wem_health_tracked_stats',
+    activityRecentNames: 'wem_activity_recent_names',
 };
 
 export const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -12,6 +13,7 @@ export const OPENAI_MODEL = 'gpt-5.2';
 
 export const FIRESTORE_COLLECTION = 'workouts';
 export const HEALTH_COLLECTION = 'healthMeasurements';
+export const ACTIVITY_COLLECTION = 'activities';
 
 export const FIREBASE_CONFIG = {
     apiKey: 'AIzaSyCloRCnxs_2QnXW6ceJysWbcfCt7RAJ5RM',

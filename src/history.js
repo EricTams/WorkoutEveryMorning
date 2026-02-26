@@ -12,7 +12,7 @@ let cachedWorkouts = [];
 
 // Per-bar state for selection and detail
 let selectedIndex = -1;
-let workoutByDate = new Map(); // dateKey -> workout
+let workoutByDate = new Map(); // dateKey -> workouts[]
 let bucketWorkouts = [];       // workouts[] per bar
 let bucketRanges = [];         // { start: Date, end: Date } per bar
 
@@ -96,7 +96,7 @@ function renderChart() {
         show(emptyEl);
         hide(workoutListEl);
         chartScrollArea.style.width = '100%';
-        chart = createChart(chartCanvas, [], [], config);
+        chart = createChart(chartCanvas, singleSeries([], []), config);
         return;
     }
 
@@ -104,12 +104,12 @@ function renderChart() {
     show(workoutListEl);
     populateWorkoutByDate();
 
-    const { labels, data } = buildSeries(config);
-    const barColors = buildBarColors();
-    updateScrollWidth(labels.length);
+    const series = buildSeries(config);
+    const barColors = series.stacked ? null : buildBarColors();
+    updateScrollWidth(series.labels.length);
 
     selectedIndex = findLastBucketWithWorkout();
-    chart = createChart(chartCanvas, labels, data, config, barColors);
+    chart = createChart(chartCanvas, series, config, barColors);
     chartContainer.scrollLeft = chartContainer.scrollWidth;
     renderDetail();
 }
@@ -129,7 +129,7 @@ function renderDetail() {
 
     const granularity = granularitySelect.value;
     if (granularity === 'daily') {
-        workoutListEl.innerHTML = workoutCardHTML(workouts[0]);
+        workoutListEl.innerHTML = workouts.map((workout) => workoutCardHTML(workout)).join('');
     } else {
         workoutListEl.innerHTML = averageCardHTML(workouts, range);
     }
@@ -141,7 +141,13 @@ function populateWorkoutByDate() {
     workoutByDate = new Map();
     for (const w of cachedWorkouts) {
         const key = dateKey(w.timestamp);
-        if (!workoutByDate.has(key)) workoutByDate.set(key, w);
+        if (!workoutByDate.has(key)) {
+            workoutByDate.set(key, []);
+        }
+        workoutByDate.get(key).push(w);
+    }
+    for (const workouts of workoutByDate.values()) {
+        workouts.sort((a, b) => a.timestamp - b.timestamp);
     }
 }
 
@@ -159,19 +165,20 @@ function buildSeries(config) {
 }
 
 function buildDaily(config, start, end) {
-    const labels = [], data = [];
+    const labels = [];
+    const dailyWorkouts = [];
     bucketWorkouts = [];
     bucketRanges = [];
 
     for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const key = dateKey(d);
-        const w = workoutByDate.get(key);
+        const workouts = workoutByDate.get(key) || [];
         labels.push(formatDayLabel(d));
-        data.push(w ? (config.getValue(w) ?? 0) : 0);
-        bucketWorkouts.push(w ? [w] : []);
+        dailyWorkouts.push(workouts);
+        bucketWorkouts.push(workouts);
         bucketRanges.push({ start: new Date(d), end: new Date(d) });
     }
-    return { labels, data };
+    return buildDailySeries(labels, dailyWorkouts, config.getValue);
 }
 
 function buildWeekly(config, start, end) {
@@ -189,7 +196,7 @@ function buildWeekly(config, start, end) {
         bucketWorkouts.push(workouts);
         bucketRanges.push({ start: new Date(cur), end: weekEnd });
     }
-    return { labels, data };
+    return singleSeries(labels, data);
 }
 
 function buildMonthly(config, start, end) {
@@ -208,7 +215,7 @@ function buildMonthly(config, start, end) {
         bucketRanges.push({ start: new Date(cursor), end: monthEnd });
         cursor.setMonth(cursor.getMonth() + 1);
     }
-    return { labels, data };
+    return singleSeries(labels, data);
 }
 
 /** Collect workouts and metric sum for a date range. */
@@ -216,13 +223,66 @@ function collectBucket(start, end, getValue) {
     const workouts = [];
     let sum = 0;
     for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const w = workoutByDate.get(dateKey(d));
-        if (w) {
-            workouts.push(w);
-            sum += getValue(w) ?? 0;
+        const dayWorkouts = workoutByDate.get(dateKey(d)) || [];
+        if (dayWorkouts.length > 0) {
+            workouts.push(...dayWorkouts);
+            sum += sumMetric(dayWorkouts, getValue);
         }
     }
     return { workouts, sum };
+}
+
+function buildDailySeries(labels, dailyWorkouts, getValue) {
+    const maxPerDay = dailyWorkouts.reduce((best, workouts) => Math.max(best, workouts.length), 0);
+    if (maxPerDay <= 1) {
+        const data = dailyWorkouts.map((workouts) => sumMetric(workouts, getValue));
+        return singleSeries(labels, data);
+    }
+
+    const datasets = [];
+    for (let i = 0; i < maxPerDay; i++) {
+        const data = [];
+        const background = [];
+        const border = [];
+        for (const workouts of dailyWorkouts) {
+            const workout = workouts[i];
+            if (!workout) {
+                data.push(0);
+                background.push('transparent');
+                border.push('transparent');
+                continue;
+            }
+            const value = getValue(workout) ?? 0;
+            const type = normalizeMachineType(workout.machineType) || 'unknown';
+            const color = machineTypeColor(type);
+            data.push(value);
+            background.push(withAlpha(color, 'cc'));
+            border.push(color);
+        }
+        datasets.push({
+            label: `Workout ${i + 1}`,
+            data,
+            backgroundColor: background,
+            borderColor: border,
+            borderWidth: 1,
+            borderRadius: 4,
+            minBarLength: 1,
+            stack: 'daily-workouts',
+        });
+    }
+    return { labels, datasets, stacked: true };
+}
+
+function singleSeries(labels, data) {
+    return { labels, data, stacked: false };
+}
+
+function sumMetric(workouts, getValue) {
+    let total = 0;
+    for (const workout of workouts) {
+        total += getValue(workout) ?? 0;
+    }
+    return total;
 }
 
 // --- Chart -----------------------------------------------------------------
@@ -247,20 +307,23 @@ const selectionLinePlugin = {
     },
 };
 
-function createChart(canvas, labels, data, config, barColors = null) {
+function createChart(canvas, series, config, barColors = null) {
+    const datasets = series.datasets || [{
+        label: config.label,
+        data: series.data,
+        backgroundColor: barColors?.background || (config.color + 'cc'),
+        borderColor: barColors?.border || config.color,
+        borderWidth: 1,
+        borderRadius: 4,
+        minBarLength: 1,
+    }];
+    applyBarGradients(datasets, config.color);
+
     return new Chart(canvas, {
         type: 'bar',
         data: {
-            labels,
-            datasets: [{
-                label: config.label,
-                data,
-                backgroundColor: barColors?.background || (config.color + 'cc'),
-                borderColor: barColors?.border || config.color,
-                borderWidth: 1,
-                borderRadius: 4,
-                minBarLength: 1,
-            }],
+            labels: series.labels,
+            datasets,
         },
         plugins: [selectionLinePlugin],
         options: {
@@ -270,16 +333,26 @@ function createChart(canvas, labels, data, config, barColors = null) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    callbacks: { label: (ctx) => config.format(ctx.parsed.y) },
+                    mode: series.stacked ? 'index' : 'nearest',
+                    intersect: !series.stacked,
+                    callbacks: {
+                        label: (ctx) => {
+                            const value = config.format(ctx.parsed.y);
+                            if (!series.stacked) return value;
+                            return `${ctx.dataset.label}: ${value}`;
+                        },
+                    },
                 },
             },
             scales: {
                 x: {
+                    stacked: series.stacked,
                     ticks: { color: '#9ca3b4', maxRotation: 45, font: { size: 10 } },
                     grid: { display: false },
                 },
                 y: {
                     beginAtZero: true,
+                    stacked: series.stacked,
                     title: {
                         display: Boolean(config.yLabel),
                         text: config.yLabel || '',
@@ -291,6 +364,33 @@ function createChart(canvas, labels, data, config, barColors = null) {
             },
         },
     });
+}
+
+function applyBarGradients(datasets, fallbackColor) {
+    for (const dataset of datasets) {
+        const baseColors = toColorArray(dataset.borderColor, fallbackColor);
+        dataset.backgroundColor = (ctx) => {
+            const color = baseColors[ctx.dataIndex] || fallbackColor;
+            if (!color || color === 'transparent') return 'transparent';
+            return verticalGradient(ctx.chart, color);
+        };
+    }
+}
+
+function toColorArray(colorOrArray, fallbackColor) {
+    if (Array.isArray(colorOrArray)) return colorOrArray;
+    return [colorOrArray || fallbackColor];
+}
+
+function verticalGradient(chart, color) {
+    const area = chart.chartArea;
+    if (!area) return withAlpha(color, 'cc');
+    const topColor = withAlpha(adjustHexColor(color, 0.18), 'cc');
+    const bottomColor = withAlpha(adjustHexColor(color, -0.24), 'dd');
+    const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    gradient.addColorStop(0, topColor);
+    gradient.addColorStop(1, bottomColor);
+    return gradient;
 }
 
 function updateScrollWidth(barCount) {
@@ -343,6 +443,18 @@ function dominantMachineType(workouts) {
 function withAlpha(hexColor, alphaHex) {
     if (typeof hexColor !== 'string') return hexColor;
     return /^#[0-9a-fA-F]{6}$/.test(hexColor) ? `${hexColor}${alphaHex}` : hexColor;
+}
+
+function adjustHexColor(hexColor, amount) {
+    if (typeof hexColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hexColor)) return hexColor;
+    const channels = [1, 3, 5].map((offset) => parseInt(hexColor.slice(offset, offset + 2), 16));
+    const adjusted = channels.map((channel) => {
+        if (amount >= 0) {
+            return Math.round(channel + ((255 - channel) * amount));
+        }
+        return Math.round(channel * (1 + amount));
+    });
+    return `#${adjusted.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 
 // --- Helpers ---------------------------------------------------------------

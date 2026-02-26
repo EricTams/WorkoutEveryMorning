@@ -4,6 +4,7 @@ import { initCapture, resetToIdle } from './capture.js';
 import { initHistory, refreshHistory } from './history.js';
 import { initHealth, refreshHealth, resetHealthToIdle } from './health.js';
 import { initDashboard, refreshDashboard } from './dashboard.js';
+import { initActivityCalendar, refreshActivityCalendar } from './activity.js';
 import { show, hide } from './utils.js';
 
 // --- Boot --------------------------------------------------------------
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initHistory();
     initHealth();
     initDashboard();
+    initActivityCalendar();
     initNavigation();
 });
 
@@ -84,6 +86,9 @@ function switchScreen(screenId) {
     }
     if (screenId === 'screen-dashboard') {
         refreshDashboard();
+    }
+    if (screenId === 'screen-activity-calendar') {
+        refreshActivityCalendar();
     }
 
     // Reset capture state when leaving log screen

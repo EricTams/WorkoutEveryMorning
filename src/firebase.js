@@ -1,4 +1,9 @@
-import { FIREBASE_CONFIG, FIRESTORE_COLLECTION, HEALTH_COLLECTION } from './config.js';
+import {
+    FIREBASE_CONFIG,
+    FIRESTORE_COLLECTION,
+    HEALTH_COLLECTION,
+    ACTIVITY_COLLECTION,
+} from './config.js';
 import { getUsername } from './setup.js';
 import { resolveMachineType } from './machineType.js';
 
@@ -72,6 +77,34 @@ export async function saveWorkout(extraction, workoutDate, machineTypeOverride =
     return ref.id;
 }
 
+/**
+ * Save an activity/class document to Firestore.
+ * @param {string} activityName
+ * @param {Date} activityDate
+ * @returns {Promise<string>} The new document ID
+ */
+export async function saveActivity(activityName, activityDate) {
+    ensureReady();
+    const username = getUsername();
+    if (!username) throw new Error('No username set');
+    const cleanName = String(activityName || '').trim();
+    if (!cleanName) throw new Error('Activity name is required');
+    if (!(activityDate instanceof Date) || Number.isNaN(activityDate.getTime())) {
+        throw new Error('Invalid activity date');
+    }
+
+    const now = firebase.firestore.Timestamp.fromDate(new Date());
+    const doc = {
+        username,
+        activityName: cleanName,
+        timestamp: firebase.firestore.Timestamp.fromDate(activityDate),
+        createdAt: now,
+    };
+
+    const ref = await db.collection(ACTIVITY_COLLECTION).add(doc);
+    return ref.id;
+}
+
 // --- Read --------------------------------------------------------------
 
 /**
@@ -100,6 +133,37 @@ export async function queryWorkouts(since) {
         // Convert Firestore Timestamp to JS Date for convenience
         timestamp: doc.data().timestamp?.toDate() ?? new Date(),
     }));
+}
+
+/**
+ * Query activities for the current user, optionally filtered by date range.
+ * @param {Date|null} since - only return activities after this date (null = all)
+ * @returns {Promise<Array>} Activity documents sorted newest-first
+ */
+export async function queryActivities(since) {
+    ensureReady();
+    const username = getUsername();
+    if (!username) return [];
+
+    let query = db
+        .collection(ACTIVITY_COLLECTION)
+        .where('username', '==', username)
+        .orderBy('timestamp', 'desc');
+
+    if (since) {
+        query = query.where('timestamp', '>=', since);
+    }
+
+    try {
+        const snapshot = await query.get();
+        return snapshot.docs.map((doc) => toActivityRecord(doc));
+    } catch (err) {
+        if (isPermissionDenied(err)) {
+            console.warn('Activities query not permitted by Firestore rules');
+            return [];
+        }
+        throw err;
+    }
 }
 
 /**
@@ -219,6 +283,16 @@ function toHealthRecord(doc) {
     };
 }
 
+function toActivityRecord(doc) {
+    const data = doc.data();
+    return {
+        id: doc.id,
+        ...data,
+        timestamp: data.timestamp?.toDate() ?? new Date(),
+        createdAt: data.createdAt?.toDate?.() ?? null,
+    };
+}
+
 function toDayKey(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
         throw new Error('Invalid health measurement date');
@@ -251,4 +325,8 @@ function normalizeMeasurements(measurements) {
         output[key] = num;
     }
     return output;
+}
+
+function isPermissionDenied(err) {
+    return String(err?.code || '').toLowerCase().includes('permission-denied');
 }

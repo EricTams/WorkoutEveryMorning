@@ -61,8 +61,7 @@ Return ONLY valid JSON with this exact shape:
       "status": "<exact|close|new>",
       "selectedKey": "<string>",
       "suggestedKey": "<string>",
-      "confidence": <number 0..1>,
-      "reason": "<short explanation>"
+      "confidence": <number 0..1>
     }
   ]
 }
@@ -73,6 +72,8 @@ Rules:
 - If status is "new", suggestedKey should be a concise human-readable metric name.
 - Keep keys human readable (no snake_case conversion).
 - Return JSON only.`;
+const VISION_MAX_COMPLETION_TOKENS = 1600;
+const TEXT_MAX_COMPLETION_TOKENS = 800;
 
 /**
  * Send a workout photo to the OpenAI Vision API and return the extracted data.
@@ -118,12 +119,20 @@ export async function matchHealthMetrics(items, trackedMetrics = []) {
         unit: String(item.unit || '').trim(),
         confidence: normalizeConfidence(item.confidence),
     }));
+    const compactItems = indexedItems.map((item) => ({
+        i: item.index,
+        n: item.name,
+        v: item.value,
+        u: item.unit,
+    }));
     const prompt = [
         `Tracked metrics: ${JSON.stringify(trackedMetrics)}`,
-        `Extracted items: ${JSON.stringify(indexedItems)}`,
+        `Extracted items: ${JSON.stringify(compactItems)}`,
         'Match each extracted item to tracked metrics or suggest a new metric key.',
     ].join('\n');
-    const raw = await requestTextExtraction(HEALTH_MATCH_SYSTEM_PROMPT, prompt);
+    const raw = await requestTextExtraction(HEALTH_MATCH_SYSTEM_PROMPT, prompt, {
+        retryPrompt: `${prompt}\nReturn the smallest valid JSON possible. No extra fields.`,
+    });
     return parseHealthMatches(raw, indexedItems, trackedMetrics);
 }
 
@@ -157,7 +166,7 @@ async function requestVisionExtraction(systemPrompt, imageDataURL, userPrompt) {
                     ],
                 },
             ],
-            max_completion_tokens: 500,
+            max_completion_tokens: VISION_MAX_COMPLETION_TOKENS,
             temperature: 0,
         }),
     });
@@ -168,15 +177,53 @@ async function requestVisionExtraction(systemPrompt, imageDataURL, userPrompt) {
     }
 
     const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content;
+    const raw = extractMessageContent(data);
     if (!raw) {
-        throw new Error('No content returned from OpenAI');
+        // A long sheet can exceed token budget; retry once with compactness instruction.
+        if (isLengthLimited(data)) {
+            const retryRaw = await requestVisionExtractionRetry(systemPrompt, imageDataURL, userPrompt);
+            if (retryRaw) return retryRaw;
+        }
+        throw new Error(`No content returned from OpenAI. ${summarizeChoice(data)}`);
     }
 
     return raw;
 }
 
-async function requestTextExtraction(systemPrompt, userPrompt) {
+async function requestVisionExtractionRetry(systemPrompt, imageDataURL, userPrompt) {
+    const apiKey = getApiKey();
+    if (!apiKey) return '';
+
+    const compactPrompt = `${userPrompt}\nReturn compact JSON only. Keep keys short and avoid extra whitespace.`;
+    const response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: OPENAI_MODEL,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'image_url', image_url: { url: imageDataURL } },
+                        { type: 'text', text: compactPrompt },
+                    ],
+                },
+            ],
+            max_completion_tokens: VISION_MAX_COMPLETION_TOKENS,
+            temperature: 0,
+        }),
+    });
+    if (!response.ok) return '';
+
+    const data = await response.json();
+    return extractMessageContent(data);
+}
+
+async function requestTextExtraction(systemPrompt, userPrompt, options = {}) {
     const apiKey = getApiKey();
     if (!apiKey) {
         throw new Error('OpenAI API key not configured');
@@ -194,7 +241,7 @@ async function requestTextExtraction(systemPrompt, userPrompt) {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt },
             ],
-            max_completion_tokens: 500,
+            max_completion_tokens: TEXT_MAX_COMPLETION_TOKENS,
             temperature: 0,
         }),
     });
@@ -205,11 +252,39 @@ async function requestTextExtraction(systemPrompt, userPrompt) {
     }
 
     const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content;
+    const raw = extractMessageContent(data);
     if (!raw) {
-        throw new Error('No content returned from OpenAI');
+        if (isLengthLimited(data) && options.retryPrompt) {
+            const retryRaw = await requestTextRetry(systemPrompt, options.retryPrompt);
+            if (retryRaw) return retryRaw;
+        }
+        throw new Error(`No content returned from OpenAI. ${summarizeChoice(data)}`);
     }
     return raw;
+}
+
+async function requestTextRetry(systemPrompt, userPrompt) {
+    const apiKey = getApiKey();
+    if (!apiKey) return '';
+    const response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: OPENAI_MODEL,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+            ],
+            max_completion_tokens: TEXT_MAX_COMPLETION_TOKENS,
+            temperature: 0,
+        }),
+    });
+    if (!response.ok) return '';
+    const data = await response.json();
+    return extractMessageContent(data);
 }
 
 /**
@@ -266,8 +341,6 @@ function parseHealthMatches(raw, indexedItems, trackedMetrics) {
         const selectedKey = normalizeKey(matched.selectedKey);
         const suggestedKey = normalizeKey(matched.suggestedKey);
         const confidence = normalizeConfidence(matched.confidence);
-        const reason = String(matched.reason || '').trim();
-
         if (status === 'exact' || status === 'close') {
             const existing = findTrackedMetric(selectedKey, trackedMetrics);
             if (!existing) {
@@ -281,7 +354,6 @@ function parseHealthMatches(raw, indexedItems, trackedMetrics) {
                 confidence,
                 selectedKey: existing,
                 suggestedKey: existing,
-                matchReason: reason,
                 knownOptions: trackedMetrics,
             };
         }
@@ -295,7 +367,6 @@ function parseHealthMatches(raw, indexedItems, trackedMetrics) {
             confidence,
             selectedKey: normalizeKey(nextKey),
             suggestedKey: normalizeKey(nextKey),
-            matchReason: reason,
             knownOptions: trackedMetrics,
         };
     });
@@ -374,7 +445,34 @@ function fallbackNewMatch(item, trackedMetrics) {
         confidence: item.confidence ?? 0.5,
         selectedKey: fallbackKey,
         suggestedKey: fallbackKey,
-        matchReason: 'No LLM match returned.',
         knownOptions: trackedMetrics,
     };
+}
+
+function extractMessageContent(data) {
+    const msg = data?.choices?.[0]?.message;
+    if (!msg) return '';
+    if (typeof msg.content === 'string') return msg.content;
+    if (Array.isArray(msg.content)) {
+        const textParts = msg.content
+            .map((part) => {
+                if (typeof part === 'string') return part;
+                if (part?.type === 'text') return part.text || '';
+                return '';
+            })
+            .filter(Boolean);
+        return textParts.join('\n').trim();
+    }
+    return '';
+}
+
+function summarizeChoice(data) {
+    const choice = data?.choices?.[0];
+    const finishReason = choice?.finish_reason ? `finish_reason=${choice.finish_reason}` : 'finish_reason=unknown';
+    const refusal = choice?.message?.refusal ? `refusal=${choice.message.refusal}` : '';
+    return [finishReason, refusal].filter(Boolean).join(', ');
+}
+
+function isLengthLimited(data) {
+    return String(data?.choices?.[0]?.finish_reason || '').toLowerCase() === 'length';
 }

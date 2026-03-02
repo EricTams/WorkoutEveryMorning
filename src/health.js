@@ -22,10 +22,7 @@ let trackedMetricKeys = [];
 let cachedHealthRecords = [];
 let metricUnitsByKey = {};
 const MIN_POINT_WIDTH_PX = 28;
-const DEFAULT_TRACKED_STATS = [
-    'Height',
-    'Weight',
-];
+const NONE_METRIC_VALUE = '';
 
 export function initHealth() {
     photoInputCamera = document.getElementById('health-photo-input-camera');
@@ -54,10 +51,20 @@ export function initHealth() {
     retakeBtn.addEventListener('click', resetHealthToIdle);
     retryBtn.addEventListener('click', resetHealthToIdle);
     logAnotherBtn.addEventListener('click', resetHealthToIdle);
-    metricSelect.addEventListener('change', renderChart);
+    metricSelect.addEventListener('change', onMetricChanged);
 }
 
 export async function refreshHealth() {
+    trackedMetricKeys = getTrackedStats();
+    refreshMetricOptions();
+
+    if (!metricSelect.value) {
+        cachedHealthRecords = [];
+        metricUnitsByKey = {};
+        renderChart();
+        return;
+    }
+
     try {
         const [records, units] = await Promise.all([
             queryHealthMeasurements(null),
@@ -65,7 +72,6 @@ export async function refreshHealth() {
         ]);
         cachedHealthRecords = records;
         metricUnitsByKey = units || {};
-        trackedMetricKeys = getTrackedStats();
         trackedMetricKeys = mergeTrackedStats(
             trackedMetricKeys,
             collectKnownMetricKeys(cachedHealthRecords),
@@ -107,7 +113,24 @@ async function onPhotoSelected(event) {
 
         const resized = await resizeImage(dataURL);
         const extracted = await extractHealthFromImage(resized, trackedMetricKeys);
-        pendingReviewRows = await matchHealthMetrics(extracted, trackedMetricKeys);
+        try {
+            pendingReviewRows = await matchHealthMetrics(extracted, trackedMetricKeys);
+        } catch (matchErr) {
+            console.warn('Health metric matching failed, using fallback suggestions:', matchErr);
+            pendingReviewRows = extracted.map((item) => {
+                const key = toMetricKey(item.name);
+                return {
+                    status: 'new',
+                    name: item.name,
+                    value: item.value,
+                    unit: item.unit || '',
+                    confidence: item.confidence ?? 0.5,
+                    selectedKey: key,
+                    suggestedKey: key,
+                    knownOptions: trackedMetricKeys,
+                };
+            });
+        }
         pendingReviewRows = pendingReviewRows.map((row) => {
             const knownUnit = metricUnitsByKey[toMetricKey(row.selectedKey)] || '';
             if (row.unit) return row;
@@ -283,18 +306,17 @@ function collectKnownMetricKeys(records) {
 
 function refreshMetricOptions() {
     const current = metricSelect.value;
-    if (trackedMetricKeys.length === 0) {
-        metricSelect.innerHTML = '<option value="">No metrics</option>';
-        metricSelect.disabled = true;
-        return;
-    }
+    const options = [
+        `<option value="${NONE_METRIC_VALUE}">None</option>`,
+        ...trackedMetricKeys.map((key) => `<option value="${escapeHtml(key)}">${humanizeMetricKey(key)}</option>`),
+    ];
     metricSelect.disabled = false;
-    metricSelect.innerHTML = trackedMetricKeys
-        .map((key) => `<option value="${escapeHtml(key)}">${humanizeMetricKey(key)}</option>`)
-        .join('');
+    metricSelect.innerHTML = options.join('');
     if (trackedMetricKeys.includes(current)) {
         metricSelect.value = current;
+        return;
     }
+    metricSelect.value = NONE_METRIC_VALUE;
 }
 
 function renderChart() {
@@ -449,17 +471,22 @@ function escapeHtml(value) {
 
 function getTrackedStats() {
     const raw = localStorage.getItem(STORAGE_KEYS.healthTrackedStats);
-    if (!raw) return [...DEFAULT_TRACKED_STATS];
+    if (!raw) return [];
     try {
         const parsed = JSON.parse(raw);
         const stats = Array.isArray(parsed) ? parsed : [];
         const cleaned = stats
             .map((item) => toMetricKey(item))
             .filter(Boolean);
-        if (cleaned.length === 0) return [...DEFAULT_TRACKED_STATS];
-        return dedupeByNormalizedKey(cleaned);
+        if (cleaned.length === 0) return [];
+        const deduped = dedupeByNormalizedKey(cleaned);
+        if (isLegacySeedOnly(deduped)) {
+            localStorage.removeItem(STORAGE_KEYS.healthTrackedStats);
+            return [];
+        }
+        return deduped;
     } catch {
-        return [...DEFAULT_TRACKED_STATS];
+        return [];
     }
 }
 
@@ -485,4 +512,19 @@ function dedupeByNormalizedKey(list) {
         byKey.set(normalized, readable);
     }
     return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+}
+
+function isLegacySeedOnly(list) {
+    if (!Array.isArray(list) || list.length !== 2) return false;
+    const normalized = list.map((item) => toMetricKey(item).toLowerCase()).sort();
+    return normalized[0] === 'height' && normalized[1] === 'weight';
+}
+
+async function onMetricChanged() {
+    if (!metricSelect.value) {
+        cachedHealthRecords = [];
+        renderChart();
+        return;
+    }
+    await refreshHealth();
 }

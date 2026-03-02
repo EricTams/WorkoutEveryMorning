@@ -279,8 +279,25 @@ export async function queryHealthMeasurements(since) {
         query = query.where('timestamp', '>=', since);
     }
 
-    const snapshot = await query.get();
-    return snapshot.docs.map((doc) => toHealthRecord(doc));
+    try {
+        const snapshot = await query.get();
+        return snapshot.docs.map((doc) => toHealthRecord(doc));
+    } catch (err) {
+        // Fallback path avoids composite index requirement: filter by username only,
+        // then apply date filter + timestamp sort client-side.
+        if (isFailedPrecondition(err)) {
+            const fallbackSnapshot = await db
+                .collection(HEALTH_COLLECTION)
+                .where('username', '==', username)
+                .get();
+            const rows = fallbackSnapshot.docs
+                .map((doc) => toHealthRecord(doc))
+                .filter((row) => !since || row.timestamp >= since)
+                .sort((a, b) => b.timestamp - a.timestamp);
+            return rows;
+        }
+        throw err;
+    }
 }
 
 /**
@@ -381,4 +398,10 @@ function normalizeMetricUnits(metricUnits) {
 
 function isPermissionDenied(err) {
     return String(err?.code || '').toLowerCase().includes('permission-denied');
+}
+
+function isFailedPrecondition(err) {
+    const code = String(err?.code || '').toLowerCase();
+    const message = String(err?.message || '').toLowerCase();
+    return code.includes('failed-precondition') || message.includes('requires an index');
 }

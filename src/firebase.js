@@ -214,6 +214,15 @@ export async function saveOrMergeHealthMeasurement(dayDate, resolvedMetrics, met
         const existingMetricUnits = metricMetaSnapshot.exists
             ? (metricMetaSnapshot.data()?.metricUnits || {})
             : {};
+        const existingTrackedMetrics = metricMetaSnapshot.exists
+            ? (Array.isArray(metricMetaSnapshot.data()?.trackedMetrics) ? metricMetaSnapshot.data().trackedMetrics : [])
+            : [];
+        const nextTrackedMetrics = mergeTrackedMetrics(
+            existingTrackedMetrics,
+            Object.keys(existingMetricUnits),
+            Object.keys(normalizedUnits),
+            Object.keys(normalized),
+        );
 
         const addedKeys = [];
         const updatedKeys = [];
@@ -254,6 +263,7 @@ export async function saveOrMergeHealthMeasurement(dayDate, resolvedMetrics, met
                 ...existingMetricUnits,
                 ...normalizedUnits,
             },
+            trackedMetrics: nextTrackedMetrics,
         }, { merge: true });
     });
 
@@ -301,26 +311,41 @@ export async function queryHealthMeasurements(since) {
 }
 
 /**
- * Query unit metadata for all tracked health metrics for the current user.
- * @returns {Promise<Record<string, string>>}
+ * Query metadata for tracked health metrics for the current user.
+ * @returns {Promise<{ metricUnits: Record<string, string>, trackedMetrics: string[] }>}
  */
-export async function queryHealthMetricUnits() {
+export async function queryHealthMetricMetadata() {
     ensureReady();
     const username = getUsername();
-    if (!username) return {};
+    if (!username) return { metricUnits: {}, trackedMetrics: [] };
 
     const ref = db.collection(HEALTH_METRIC_META_COLLECTION).doc(encodeURIComponent(username));
     try {
         const snapshot = await ref.get();
-        if (!snapshot.exists) return {};
-        return snapshot.data()?.metricUnits || {};
+        if (!snapshot.exists) {
+            return { metricUnits: {}, trackedMetrics: [] };
+        }
+        const data = snapshot.data() || {};
+        return {
+            metricUnits: data.metricUnits || {},
+            trackedMetrics: Array.isArray(data.trackedMetrics) ? data.trackedMetrics : [],
+        };
     } catch (err) {
         if (isPermissionDenied(err)) {
             console.warn('Health metric metadata query not permitted by Firestore rules');
-            return {};
+            return { metricUnits: {}, trackedMetrics: [] };
         }
         throw err;
     }
+}
+
+/**
+ * Backward-compatible helper for callers only needing unit map.
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function queryHealthMetricUnits() {
+    const metadata = await queryHealthMetricMetadata();
+    return metadata.metricUnits || {};
 }
 
 // --- Helpers -----------------------------------------------------------
@@ -404,4 +429,17 @@ function isFailedPrecondition(err) {
     const code = String(err?.code || '').toLowerCase();
     const message = String(err?.message || '').toLowerCase();
     return code.includes('failed-precondition') || message.includes('requires an index');
+}
+
+function mergeTrackedMetrics(...arrays) {
+    const byKey = new Map();
+    for (const arr of arrays) {
+        for (const key of arr || []) {
+            const clean = String(key || '').trim();
+            const normalized = clean.toLowerCase();
+            if (!clean || byKey.has(normalized)) continue;
+            byKey.set(normalized, clean);
+        }
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b));
 }

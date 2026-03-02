@@ -1,4 +1,4 @@
-import { queryActivities, queryWorkouts } from './firebase.js';
+import { queryActivities, queryHealthMeasurements, queryWorkouts } from './firebase.js';
 import { machineTypeColor, machineTypeLabel, normalizeMachineType } from './machineType.js';
 import { getActivityColor } from './activity-colors.js';
 import { formatNum } from './utils.js';
@@ -30,26 +30,29 @@ export function initDashboard() {
 }
 
 export async function refreshDashboard() {
+    const calendarSince = getWindowStart(CALENDAR_DAYS);
     try {
-        const [workouts, activities] = await Promise.all([
+        const [workouts, activities, healthMeasurements] = await Promise.all([
             queryWorkouts(null),
             queryActivities(null),
+            queryHealthMeasurements(calendarSince),
         ]);
         const workoutWindow = filterToLastNDays(workouts, LOOKBACK_DAYS);
         const calendarWorkoutWindow = filterToLastNDays(workouts, CALENDAR_DAYS);
         const calendarActivityWindow = filterToLastNDays(activities, CALENDAR_DAYS);
-        renderDashboard(workoutWindow, calendarWorkoutWindow, calendarActivityWindow);
+        const calendarHealthWindow = filterToLastNDays(healthMeasurements, CALENDAR_DAYS);
+        renderDashboard(workoutWindow, calendarWorkoutWindow, calendarActivityWindow, calendarHealthWindow);
     } catch (err) {
         console.error('Failed to load dashboard data:', err);
-        renderDashboard([], [], []);
+        renderDashboard([], [], [], []);
     }
 }
 
-function renderDashboard(workouts, calendarWorkouts, activities) {
+function renderDashboard(workouts, calendarWorkouts, activities, healthMeasurements) {
     if (!workouts.length && !activities.length) {
         showEmptyState();
         renderMachineMix([]);
-        renderCalendar([], []);
+        renderCalendar([], [], []);
         return;
     }
 
@@ -65,7 +68,7 @@ function renderDashboard(workouts, calendarWorkouts, activities) {
         resetMetricsToZero();
     }
     renderMachineMix(workouts);
-    renderCalendar(calendarWorkouts, activities);
+    renderCalendar(calendarWorkouts, activities, healthMeasurements);
     showContentState();
 }
 
@@ -188,17 +191,18 @@ function machineMixCounts(workouts) {
     return counts;
 }
 
-function renderCalendar(workouts, activities) {
+function renderCalendar(workouts, activities, healthMeasurements) {
     if (!calendarGridEl) return;
     const workoutTypesByDay = workoutTypesForDay(workouts);
     const activityNamesByDay = activityNamesForDay(activities);
+    const healthDays = healthMeasurementDays(healthMeasurements);
     const days = buildDayWindow(CALENDAR_DAYS);
     calendarGridEl.innerHTML = days
-        .map((date) => calendarCellHTML(date, workoutTypesByDay, activityNamesByDay))
+        .map((date) => calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDays))
         .join('');
 }
 
-function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay) {
+function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDays) {
     const key = dateKey(date);
     const workoutTypes = workoutTypesByDay.get(key) || [];
     const activityNames = activityNamesByDay.get(key) || [];
@@ -208,13 +212,18 @@ function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay) {
     const activityMarkers = activityNames.slice(0, 4).map((name) => (
         `<span class="calendar-marker" style="background:${getActivityColor(name)}" title="${escapeHtml(name)}"></span>`
     )).join('');
-    const hasAny = workoutTypes.length > 0 || activityNames.length > 0;
+    const hasHealth = healthDays.has(key);
+    const healthMarker = hasHealth
+        ? '<span class="calendar-marker calendar-marker-health" title="Health measurement"></span>'
+        : '';
+    const hasAny = workoutTypes.length > 0 || activityNames.length > 0 || hasHealth;
     return `
         <div class="calendar-day calendar-day-summary ${hasAny ? 'calendar-day-has-data' : ''}">
             <span class="calendar-day-num">${date.getDate()}</span>
             <span class="calendar-marker-row">
                 ${workoutMarkers}
                 ${activityMarkers}
+                ${healthMarker}
             </span>
         </div>
     `;
@@ -244,6 +253,16 @@ function workoutTypesForDay(items) {
         byDay.set(key, list);
     }
     return byDay;
+}
+
+function healthMeasurementDays(items) {
+    const daySet = new Set();
+    for (const item of items || []) {
+        const key = item.dayKey || dateKey(item.timestamp);
+        if (!key) continue;
+        daySet.add(key);
+    }
+    return daySet;
 }
 
 function buildDayWindow(days) {

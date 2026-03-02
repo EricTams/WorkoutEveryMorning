@@ -457,6 +457,10 @@ html, body {
     background: #a78bfa;
 }
 
+.calendar-marker-health {
+    background: #f472b6;
+}
+
 .calendar-legend {
     display: flex;
     align-items: center;

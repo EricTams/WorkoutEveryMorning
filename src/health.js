@@ -1,7 +1,7 @@
 import { extractHealthFromImage, matchHealthMetrics } from './llm.js';
 import {
     queryHealthMeasurements,
-    queryHealthMetricUnits,
+    queryHealthMetricMetadata,
     saveOrMergeHealthMeasurement,
 } from './firebase.js';
 import { toMetricKey } from './health-matching.js';
@@ -56,26 +56,34 @@ export function initHealth() {
 
 export async function refreshHealth() {
     trackedMetricKeys = getTrackedStats();
+    metricUnitsByKey = {};
+
+    try {
+        const metadata = await queryHealthMetricMetadata();
+        metricUnitsByKey = metadata.metricUnits || {};
+        trackedMetricKeys = mergeTrackedStats(
+            trackedMetricKeys,
+            metadata.trackedMetrics || [],
+            Object.keys(metricUnitsByKey),
+        );
+    } catch (err) {
+        console.warn('Failed to load health metadata:', err);
+    }
+
+    saveTrackedStats(trackedMetricKeys);
     refreshMetricOptions();
 
     if (!metricSelect.value) {
         cachedHealthRecords = [];
-        metricUnitsByKey = {};
         renderChart();
         return;
     }
 
     try {
-        const [records, units] = await Promise.all([
-            queryHealthMeasurements(null),
-            queryHealthMetricUnits(),
-        ]);
-        cachedHealthRecords = records;
-        metricUnitsByKey = units || {};
+        cachedHealthRecords = await queryHealthMeasurements(null);
         trackedMetricKeys = mergeTrackedStats(
             trackedMetricKeys,
             collectKnownMetricKeys(cachedHealthRecords),
-            Object.keys(metricUnitsByKey),
         );
         saveTrackedStats(trackedMetricKeys);
         refreshMetricOptions();
@@ -83,9 +91,6 @@ export async function refreshHealth() {
     } catch (err) {
         console.error('Failed to load health data:', err);
         cachedHealthRecords = [];
-        metricUnitsByKey = {};
-        trackedMetricKeys = getTrackedStats();
-        refreshMetricOptions();
         renderChart();
     }
 }

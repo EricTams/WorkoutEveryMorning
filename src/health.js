@@ -1,5 +1,9 @@
 import { extractHealthFromImage, matchHealthMetrics } from './llm.js';
-import { queryHealthMeasurements, saveOrMergeHealthMeasurement } from './firebase.js';
+import {
+    queryHealthMeasurements,
+    queryHealthMetricUnits,
+    saveOrMergeHealthMeasurement,
+} from './firebase.js';
 import { toMetricKey } from './health-matching.js';
 import { STORAGE_KEYS } from './config.js';
 import {
@@ -16,6 +20,7 @@ let chart = null;
 let pendingReviewRows = [];
 let trackedMetricKeys = [];
 let cachedHealthRecords = [];
+let metricUnitsByKey = {};
 const MIN_POINT_WIDTH_PX = 28;
 const DEFAULT_TRACKED_STATS = [
     'Height',
@@ -54,15 +59,25 @@ export function initHealth() {
 
 export async function refreshHealth() {
     try {
-        cachedHealthRecords = await queryHealthMeasurements(null);
+        const [records, units] = await Promise.all([
+            queryHealthMeasurements(null),
+            queryHealthMetricUnits(),
+        ]);
+        cachedHealthRecords = records;
+        metricUnitsByKey = units || {};
         trackedMetricKeys = getTrackedStats();
-        trackedMetricKeys = mergeTrackedStats(trackedMetricKeys, collectKnownMetricKeys(cachedHealthRecords));
+        trackedMetricKeys = mergeTrackedStats(
+            trackedMetricKeys,
+            collectKnownMetricKeys(cachedHealthRecords),
+            Object.keys(metricUnitsByKey),
+        );
         saveTrackedStats(trackedMetricKeys);
         refreshMetricOptions();
         renderChart();
     } catch (err) {
         console.error('Failed to load health data:', err);
         cachedHealthRecords = [];
+        metricUnitsByKey = {};
         trackedMetricKeys = getTrackedStats();
         refreshMetricOptions();
         renderChart();
@@ -93,6 +108,12 @@ async function onPhotoSelected(event) {
         const resized = await resizeImage(dataURL);
         const extracted = await extractHealthFromImage(resized, trackedMetricKeys);
         pendingReviewRows = await matchHealthMetrics(extracted, trackedMetricKeys);
+        pendingReviewRows = pendingReviewRows.map((row) => {
+            const knownUnit = metricUnitsByKey[toMetricKey(row.selectedKey)] || '';
+            if (row.unit) return row;
+            if (!knownUnit) return row;
+            return { ...row, unit: knownUnit };
+        });
         dateInput.value = toDateInputValue(photoDate);
         renderReviewRows(pendingReviewRows);
         showState(reviewEl);
@@ -116,6 +137,13 @@ async function onSave() {
             acc[key] = row.value;
             return acc;
         }, {});
+        const metricUnits = reviewed.reduce((acc, row) => {
+            const key = toMetricKey(row.selectedKey);
+            const unit = String(row.unit || '').trim();
+            if (!key || !unit) return acc;
+            acc[key] = unit;
+            return acc;
+        }, {});
         const selectedDate = dateInput.value
             ? new Date(dateInput.value + 'T12:00:00')
             : new Date();
@@ -130,7 +158,11 @@ async function onSave() {
                 confidence: row.confidence,
             })),
         };
-        await saveOrMergeHealthMeasurement(selectedDate, measurements, reviewMeta);
+        await saveOrMergeHealthMeasurement(selectedDate, measurements, metricUnits, reviewMeta);
+        metricUnitsByKey = {
+            ...metricUnitsByKey,
+            ...metricUnits,
+        };
         trackedMetricKeys = mergeTrackedStats(
             trackedMetricKeys,
             reviewed.map((row) => row.selectedKey),
@@ -311,12 +343,14 @@ function buildSeries(metricKey, records) {
 
 function createHealthChart(labels, data, metricKey) {
     const label = humanizeMetricKey(metricKey || 'Metric');
+    const unit = metricUnitsByKey[toMetricKey(metricKey)] || '';
+    const labelWithUnit = unit ? `${label} (${unit})` : label;
     return new Chart(chartCanvas, {
         type: 'line',
         data: {
             labels,
             datasets: [{
-                label,
+                label: labelWithUnit,
                 data,
                 borderColor: '#4f8cff',
                 backgroundColor: '#4f8cff66',
@@ -334,7 +368,10 @@ function createHealthChart(labels, data, metricKey) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: (ctx) => ctx.parsed.y == null ? '--' : String(ctx.parsed.y),
+                        label: (ctx) => {
+                            if (ctx.parsed.y == null) return '--';
+                            return unit ? `${ctx.parsed.y} ${unit}` : String(ctx.parsed.y);
+                        },
                     },
                 },
             },
@@ -431,8 +468,12 @@ function saveTrackedStats(stats) {
     localStorage.setItem(STORAGE_KEYS.healthTrackedStats, JSON.stringify(cleaned));
 }
 
-function mergeTrackedStats(base, extra) {
-    return dedupeByNormalizedKey([...(base || []), ...(extra || [])]);
+function mergeTrackedStats(base, ...extras) {
+    const all = [...(base || [])];
+    for (const extra of extras) {
+        all.push(...(extra || []));
+    }
+    return dedupeByNormalizedKey(all);
 }
 
 function dedupeByNormalizedKey(list) {

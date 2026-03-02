@@ -2,6 +2,7 @@ import {
     FIREBASE_CONFIG,
     FIRESTORE_COLLECTION,
     HEALTH_COLLECTION,
+    HEALTH_METRIC_META_COLLECTION,
     ACTIVITY_COLLECTION,
 } from './config.js';
 import { getUsername } from './setup.js';
@@ -188,10 +189,11 @@ export async function queryHealthByDate(dayDate) {
  * New metric keys are added and existing keys are overwritten.
  * @param {Date} dayDate
  * @param {object} resolvedMetrics
+ * @param {Record<string, string>} metricUnits
  * @param {object|null} reviewMeta
  * @returns {Promise<string>} Document ID
  */
-export async function saveOrMergeHealthMeasurement(dayDate, resolvedMetrics, reviewMeta = null) {
+export async function saveOrMergeHealthMeasurement(dayDate, resolvedMetrics, metricUnits = {}, reviewMeta = null) {
     ensureReady();
     const username = getUsername();
     if (!username) throw new Error('No username set');
@@ -199,13 +201,19 @@ export async function saveOrMergeHealthMeasurement(dayDate, resolvedMetrics, rev
     const dayKey = toDayKey(dayDate);
     const docId = healthDocId(username, dayKey);
     const ref = db.collection(HEALTH_COLLECTION).doc(docId);
+    const metricMetaRef = db.collection(HEALTH_METRIC_META_COLLECTION).doc(encodeURIComponent(username));
 
     const normalized = normalizeMeasurements(resolvedMetrics);
+    const normalizedUnits = normalizeMetricUnits(metricUnits);
     const capturedAt = firebase.firestore.Timestamp.fromDate(new Date());
     await db.runTransaction(async (tx) => {
         const existingSnapshot = await tx.get(ref);
         const existingData = existingSnapshot.exists ? existingSnapshot.data() : null;
         const existingMeasurements = existingData?.measurements || {};
+        const metricMetaSnapshot = await tx.get(metricMetaRef);
+        const existingMetricUnits = metricMetaSnapshot.exists
+            ? (metricMetaSnapshot.data()?.metricUnits || {})
+            : {};
 
         const addedKeys = [];
         const updatedKeys = [];
@@ -238,6 +246,15 @@ export async function saveOrMergeHealthMeasurement(dayDate, resolvedMetrics, rev
             measurements: nextMeasurements,
             sources: firebase.firestore.FieldValue.arrayUnion(source),
         }, { merge: true });
+
+        tx.set(metricMetaRef, {
+            username,
+            updatedAt: capturedAt,
+            metricUnits: {
+                ...existingMetricUnits,
+                ...normalizedUnits,
+            },
+        }, { merge: true });
     });
 
     return docId;
@@ -264,6 +281,29 @@ export async function queryHealthMeasurements(since) {
 
     const snapshot = await query.get();
     return snapshot.docs.map((doc) => toHealthRecord(doc));
+}
+
+/**
+ * Query unit metadata for all tracked health metrics for the current user.
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function queryHealthMetricUnits() {
+    ensureReady();
+    const username = getUsername();
+    if (!username) return {};
+
+    const ref = db.collection(HEALTH_METRIC_META_COLLECTION).doc(encodeURIComponent(username));
+    try {
+        const snapshot = await ref.get();
+        if (!snapshot.exists) return {};
+        return snapshot.data()?.metricUnits || {};
+    } catch (err) {
+        if (isPermissionDenied(err)) {
+            console.warn('Health metric metadata query not permitted by Firestore rules');
+            return {};
+        }
+        throw err;
+    }
 }
 
 // --- Helpers -----------------------------------------------------------
@@ -323,6 +363,18 @@ function normalizeMeasurements(measurements) {
             throw new Error(`Measurement "${key}" must be numeric or null`);
         }
         output[key] = num;
+    }
+    return output;
+}
+
+function normalizeMetricUnits(metricUnits) {
+    if (!metricUnits || typeof metricUnits !== 'object') return {};
+    const output = {};
+    for (const [key, unit] of Object.entries(metricUnits)) {
+        if (!key) continue;
+        const cleanUnit = String(unit || '').trim();
+        if (!cleanUnit) continue;
+        output[key] = cleanUnit;
     }
     return output;
 }

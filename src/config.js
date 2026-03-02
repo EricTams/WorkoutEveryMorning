@@ -13,6 +13,7 @@ export const OPENAI_MODEL = 'gpt-5.2';
 
 export const FIRESTORE_COLLECTION = 'workouts';
 export const HEALTH_COLLECTION = 'healthMeasurements';
+export const HEALTH_METRIC_META_COLLECTION = 'healthMetricMeta';
 export const ACTIVITY_COLLECTION = 'activities';
 
 export const FIREBASE_CONFIG = {

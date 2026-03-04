@@ -11,7 +11,7 @@ import {
     show, hide,
 } from './utils.js';
 
-let photoInputCamera, photoInputLibrary, idleEl, loadingEl, reviewEl, errorEl, savedEl;
+let photoInputLibrary, idleEl, loadingEl, reviewEl, errorEl, savedEl;
 let reviewListEl, errorMsg, dateInput;
 let saveBtn, retakeBtn, retryBtn, logAnotherBtn;
 let metricSelect, chartCanvas, chartContainer, chartScrollArea, emptyEl;
@@ -25,7 +25,6 @@ const MIN_POINT_WIDTH_PX = 28;
 const NONE_METRIC_VALUE = '';
 
 export function initHealth() {
-    photoInputCamera = document.getElementById('health-photo-input-camera');
     photoInputLibrary = document.getElementById('health-photo-input-library');
     idleEl = document.getElementById('health-idle');
     loadingEl = document.getElementById('health-loading');
@@ -45,7 +44,6 @@ export function initHealth() {
     chartScrollArea = document.getElementById('health-chart-scroll-area');
     emptyEl = document.getElementById('health-empty');
 
-    photoInputCamera.addEventListener('change', onPhotoSelected);
     photoInputLibrary.addEventListener('change', onPhotoSelected);
     saveBtn.addEventListener('click', onSave);
     retakeBtn.addEventListener('click', resetHealthToIdle);
@@ -97,7 +95,6 @@ export async function refreshHealth() {
 
 export function resetHealthToIdle() {
     pendingReviewRows = [];
-    photoInputCamera.value = '';
     photoInputLibrary.value = '';
     reviewListEl.innerHTML = '';
     showState(idleEl);

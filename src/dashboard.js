@@ -175,7 +175,20 @@ function renderMachineMix(workouts) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    labels: { color: '#9ca3b4' },
+                    position: 'right',
+                    labels: {
+                        color: '#9ca3b4',
+                        boxWidth: 10,
+                        padding: 8,
+                        font: { size: 11 },
+                        generateLabels(chart) {
+                            const original = Chart.overrides.pie.plugins.legend.labels.generateLabels(chart);
+                            for (const item of original) {
+                                if (item.text.length > 10) item.text = item.text.slice(0, 10) + '\u2026';
+                            }
+                            return original;
+                        },
+                    },
                 },
             },
         },

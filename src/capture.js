@@ -11,7 +11,7 @@ import {
 } from './machineType.js';
 
 // DOM refs (cached on init)
-let photoInputCamera, photoInputLibrary, idleEl, loadingEl, resultEl, errorEl, savedEl;
+let photoInputLibrary, idleEl, loadingEl, resultEl, errorEl, savedEl;
 let resultCard, errorMsg, dateInput, machineTypeSelect;
 let saveBtn, retakeBtn, retryBtn, logAnotherBtn;
 
@@ -21,7 +21,6 @@ let pendingExtraction = null;
 // --- Public API --------------------------------------------------------
 
 export function initCapture() {
-    photoInputCamera = document.getElementById('photo-input-camera');
     photoInputLibrary = document.getElementById('photo-input-library');
     idleEl = document.getElementById('capture-idle');
     loadingEl = document.getElementById('capture-loading');
@@ -38,7 +37,6 @@ export function initCapture() {
     retryBtn = document.getElementById('error-retry-btn');
     logAnotherBtn = document.getElementById('log-another-btn');
 
-    photoInputCamera.addEventListener('change', onPhotoSelected);
     photoInputLibrary.addEventListener('change', onPhotoSelected);
     machineTypeSelect.addEventListener('change', onMachineTypeChanged);
     saveBtn.addEventListener('click', onSave);
@@ -52,7 +50,6 @@ export function initCapture() {
  */
 export function resetToIdle() {
     pendingExtraction = null;
-    photoInputCamera.value = '';
     photoInputLibrary.value = '';
     machineTypeSelect.value = MACHINE_TYPES.TREADMILL;
     showState(idleEl);

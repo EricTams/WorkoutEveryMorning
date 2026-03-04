@@ -303,6 +303,12 @@ html, body {
     padding-bottom: 16px;
 }
 
+.dashboard-tile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
 .dashboard-card {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -310,9 +316,18 @@ html, body {
     padding: 14px;
 }
 
+.dashboard-tile-grid .dashboard-card {
+    padding: 12px;
+}
+
 .dashboard-card h3 {
     font-size: 1rem;
     margin-bottom: 10px;
+}
+
+.dashboard-tile-grid .dashboard-card h3 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
 }
 
 .dashboard-card-head {
@@ -338,6 +353,11 @@ html, body {
     gap: 10px;
 }
 
+.dashboard-tile-grid .dashboard-metric-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
 .dashboard-card .field {
     display: flex;
     flex-direction: column;
@@ -358,6 +378,10 @@ html, body {
 
 .dashboard-chart-wrap {
     height: 220px;
+}
+
+.dashboard-tile-grid .dashboard-chart-wrap {
+    height: 130px;
 }
 
 .calendar-widget-btn {

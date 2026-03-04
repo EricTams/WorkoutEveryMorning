@@ -113,52 +113,54 @@
             </div>
 
             <div id="dashboard-content" class="dashboard-content hidden">
-                <div class="dashboard-card">
-                    <h3>Streaks</h3>
-                    <div class="dashboard-metric-grid">
-                        <div class="field">
-                            <span class="field-label">Streak Days</span>
-                            <span id="dash-streak-days" class="field-value">0</span>
-                        </div>
-                        <div class="field">
-                            <span class="field-label">Longest Streak</span>
-                            <span id="dash-longest-streak" class="field-value">0 days</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dashboard-card">
-                    <h3>Minutes</h3>
-                    <div class="dashboard-metric-grid">
-                        <div class="field">
-                            <span class="field-label">Average Minutes</span>
-                            <span id="dash-average-minutes" class="field-value">0</span>
-                        </div>
-                        <div class="field">
-                            <span class="field-label">Typical Minutes</span>
-                            <span id="dash-typical-minutes" class="field-value">0</span>
+                <div class="dashboard-tile-grid">
+                    <div class="dashboard-card">
+                        <h3>Streaks</h3>
+                        <div class="dashboard-metric-grid">
+                            <div class="field">
+                                <span class="field-label">Current</span>
+                                <span id="dash-streak-days" class="field-value">0</span>
+                            </div>
+                            <div class="field">
+                                <span class="field-label">Longest</span>
+                                <span id="dash-longest-streak" class="field-value">0 days</span>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="dashboard-card">
-                    <h3>Calories</h3>
-                    <div class="dashboard-metric-grid">
-                        <div class="field">
-                            <span class="field-label">Average Calories</span>
-                            <span id="dash-average-calories" class="field-value">0</span>
-                        </div>
-                        <div class="field">
-                            <span class="field-label">Typical Calories</span>
-                            <span id="dash-typical-calories" class="field-value">0</span>
+                    <div class="dashboard-card">
+                        <h3>Minutes</h3>
+                        <div class="dashboard-metric-grid">
+                            <div class="field">
+                                <span class="field-label">Average</span>
+                                <span id="dash-average-minutes" class="field-value">0</span>
+                            </div>
+                            <div class="field">
+                                <span class="field-label">Typical</span>
+                                <span id="dash-typical-minutes" class="field-value">0</span>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div class="dashboard-card">
-                    <h3>Machine Mix</h3>
-                    <div class="dashboard-chart-wrap">
-                        <canvas id="dashboard-machine-mix-chart"></canvas>
+                    <div class="dashboard-card">
+                        <h3>Calories</h3>
+                        <div class="dashboard-metric-grid">
+                            <div class="field">
+                                <span class="field-label">Average</span>
+                                <span id="dash-average-calories" class="field-value">0</span>
+                            </div>
+                            <div class="field">
+                                <span class="field-label">Typical</span>
+                                <span id="dash-typical-calories" class="field-value">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>Machine Mix</h3>
+                        <div class="dashboard-chart-wrap">
+                            <canvas id="dashboard-machine-mix-chart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -203,18 +205,14 @@
             <div id="capture-idle" class="capture-state">
                 <p class="capture-prompt">Snap a photo of your cardio machine screen</p>
                 <div class="capture-input-actions">
-                <label class="btn btn-large btn-primary" for="photo-input-camera">
+                <label class="btn btn-large btn-primary" for="photo-input-library">
                     <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                         <circle cx="12" cy="13" r="4"/>
                     </svg>
-                    Log Workout (Camera)
-                </label>
-                <label class="btn btn-large btn-secondary" for="photo-input-library">
-                    Choose Photo
+                    Log Workout
                 </label>
                 </div>
-                <input type="file" id="photo-input-camera" accept="image/*" capture="environment" class="hidden">
                 <input type="file" id="photo-input-library" accept="image/*" class="hidden">
             </div>
 
@@ -319,18 +317,14 @@
             <div id="health-idle" class="capture-state">
                 <p class="capture-prompt">Snap a photo of your health measurements sheet</p>
                 <div class="capture-input-actions">
-                <label class="btn btn-large btn-primary" for="health-photo-input-camera">
+                <label class="btn btn-large btn-primary" for="health-photo-input-library">
                     <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                         <circle cx="12" cy="13" r="4"/>
                     </svg>
-                    Log Health (Camera)
-                </label>
-                <label class="btn btn-large btn-secondary" for="health-photo-input-library">
-                    Choose Photo
+                    Log Health
                 </label>
                 </div>
-                <input type="file" id="health-photo-input-camera" accept="image/*" capture="environment" class="hidden">
                 <input type="file" id="health-photo-input-library" accept="image/*" class="hidden">
             </div>
 

@@ -1,4 +1,4 @@
-import { queryActivities, queryHealthMeasurements, queryWorkouts } from './firebase.js';
+import { queryActivities, queryHealthMeasurements, queryStretches, queryWorkouts } from './firebase.js';
 import { machineTypeColor, machineTypeLabel, normalizeMachineType } from './machineType.js';
 import { getActivityColor } from './activity-colors.js';
 import { formatNum } from './utils.js';
@@ -32,27 +32,29 @@ export function initDashboard() {
 export async function refreshDashboard() {
     const calendarSince = getWindowStart(CALENDAR_DAYS);
     try {
-        const [workouts, activities, healthMeasurements] = await Promise.all([
+        const [workouts, activities, healthMeasurements, stretches] = await Promise.all([
             queryWorkouts(null),
             queryActivities(null),
             queryHealthMeasurements(calendarSince),
+            queryStretches(calendarSince),
         ]);
         const workoutWindow = filterToLastNDays(workouts, LOOKBACK_DAYS);
         const calendarWorkoutWindow = filterToLastNDays(workouts, CALENDAR_DAYS);
         const calendarActivityWindow = filterToLastNDays(activities, CALENDAR_DAYS);
         const calendarHealthWindow = filterToLastNDays(healthMeasurements, CALENDAR_DAYS);
-        renderDashboard(workoutWindow, calendarWorkoutWindow, calendarActivityWindow, calendarHealthWindow);
+        const calendarStretchWindow = filterToLastNDays(stretches, CALENDAR_DAYS);
+        renderDashboard(workoutWindow, calendarWorkoutWindow, calendarActivityWindow, calendarHealthWindow, calendarStretchWindow);
     } catch (err) {
         console.error('Failed to load dashboard data:', err);
-        renderDashboard([], [], [], []);
+        renderDashboard([], [], [], [], []);
     }
 }
 
-function renderDashboard(workouts, calendarWorkouts, activities, healthMeasurements) {
+function renderDashboard(workouts, calendarWorkouts, activities, healthMeasurements, stretches) {
     if (!workouts.length && !activities.length) {
         showEmptyState();
         renderMachineMix([]);
-        renderCalendar([], [], []);
+        renderCalendar([], [], [], []);
         return;
     }
 
@@ -68,7 +70,7 @@ function renderDashboard(workouts, calendarWorkouts, activities, healthMeasureme
         resetMetricsToZero();
     }
     renderMachineMix(workouts);
-    renderCalendar(calendarWorkouts, activities, healthMeasurements);
+    renderCalendar(calendarWorkouts, activities, healthMeasurements, stretches);
     showContentState();
 }
 
@@ -204,18 +206,19 @@ function machineMixCounts(workouts) {
     return counts;
 }
 
-function renderCalendar(workouts, activities, healthMeasurements) {
+function renderCalendar(workouts, activities, healthMeasurements, stretches) {
     if (!calendarGridEl) return;
     const workoutTypesByDay = workoutTypesForDay(workouts);
     const activityNamesByDay = activityNamesForDay(activities);
     const healthDays = healthMeasurementDays(healthMeasurements);
+    const stretchDays = stretchCompletionDays(stretches);
     const days = buildDayWindow(CALENDAR_DAYS);
     calendarGridEl.innerHTML = days
-        .map((date) => calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDays))
+        .map((date) => calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDays, stretchDays))
         .join('');
 }
 
-function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDays) {
+function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDays, stretchDays) {
     const key = dateKey(date);
     const workoutTypes = workoutTypesByDay.get(key) || [];
     const activityNames = activityNamesByDay.get(key) || [];
@@ -229,7 +232,11 @@ function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDay
     const healthMarker = hasHealth
         ? '<span class="calendar-marker calendar-marker-health" title="Health measurement"></span>'
         : '';
-    const hasAny = workoutTypes.length > 0 || activityNames.length > 0 || hasHealth;
+    const hasStretch = stretchDays.has(key);
+    const stretchMarker = hasStretch
+        ? '<span class="calendar-marker calendar-marker-stretch" title="Stretching"></span>'
+        : '';
+    const hasAny = workoutTypes.length > 0 || activityNames.length > 0 || hasHealth || hasStretch;
     return `
         <div class="calendar-day calendar-day-summary ${hasAny ? 'calendar-day-has-data' : ''}">
             <span class="calendar-day-num">${date.getDate()}</span>
@@ -237,6 +244,7 @@ function calendarCellHTML(date, workoutTypesByDay, activityNamesByDay, healthDay
                 ${workoutMarkers}
                 ${activityMarkers}
                 ${healthMarker}
+                ${stretchMarker}
             </span>
         </div>
     `;
@@ -272,6 +280,16 @@ function healthMeasurementDays(items) {
     const daySet = new Set();
     for (const item of items || []) {
         const key = item.dayKey || dateKey(item.timestamp);
+        if (!key) continue;
+        daySet.add(key);
+    }
+    return daySet;
+}
+
+function stretchCompletionDays(items) {
+    const daySet = new Set();
+    for (const item of items || []) {
+        const key = dateKey(item.timestamp);
         if (!key) continue;
         daySet.add(key);
     }

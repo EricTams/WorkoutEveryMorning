@@ -2,12 +2,14 @@ export const MACHINE_TYPES = {
     ELIPTICAL: 'eliptical',
     TREADMILL: 'treadmill',
     CYCLE: 'cycle',
+    HIKING: 'hiking',
 };
 
 export const MACHINE_TYPE_COLORS = {
     [MACHINE_TYPES.ELIPTICAL]: '#f59e0b',
     [MACHINE_TYPES.TREADMILL]: '#f7e8b4',
     [MACHINE_TYPES.CYCLE]: '#f2c46d',
+    [MACHINE_TYPES.HIKING]: '#c2410c',
     unknown: '#6b7280',
 };
 
@@ -27,12 +29,15 @@ const NORMALIZED_TYPE_MAP = {
     bicycle: MACHINE_TYPES.CYCLE,
     spin: MACHINE_TYPES.CYCLE,
     spinning: MACHINE_TYPES.CYCLE,
+    hiking: MACHINE_TYPES.HIKING,
+    hike: MACHINE_TYPES.HIKING,
 };
 
 const MACHINE_TYPE_LABELS = {
     [MACHINE_TYPES.ELIPTICAL]: 'Eliptical',
     [MACHINE_TYPES.TREADMILL]: 'Treadmill',
     [MACHINE_TYPES.CYCLE]: 'Cycle',
+    [MACHINE_TYPES.HIKING]: 'Hiking',
 };
 
 export function normalizeMachineType(value) {

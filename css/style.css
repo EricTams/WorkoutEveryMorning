@@ -485,6 +485,10 @@ html, body {
     background: #f472b6;
 }
 
+.calendar-marker-stretch {
+    background: #9ca3af;
+}
+
 .calendar-legend {
     display: flex;
     align-items: center;
@@ -518,6 +522,35 @@ html, body {
 .coming-soon-card p {
     color: var(--color-text-secondary);
     margin-bottom: 16px;
+}
+
+/* --- Stretching Screen --- */
+.stretch-exercise-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.stretch-exercise-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stretch-exercise-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.stretch-exercise-desc {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    line-height: 1.35;
 }
 
 /* --- Capture States --- */

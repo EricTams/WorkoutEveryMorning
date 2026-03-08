@@ -1,4 +1,4 @@
-import { queryActivities, queryWorkouts, saveActivity } from './firebase.js';
+import { queryActivities, queryStretches, queryWorkouts, saveActivity } from './firebase.js';
 import { STORAGE_KEYS } from './config.js';
 import { getActivityColor } from './activity-colors.js';
 import { machineTypeColor, machineTypeLabel, normalizeMachineType } from './machineType.js';
@@ -36,18 +36,19 @@ export async function refreshActivityCalendar() {
     if (!gridEl) return;
     const since = getWindowStart(CALENDAR_DAYS);
     try {
-        const [workouts, activities] = await Promise.all([
+        const [workouts, activities, stretches] = await Promise.all([
             queryWorkouts(since),
             queryActivities(since),
+            queryStretches(since),
         ]);
         const recent = mergeRecentWithKnown(getRecentActivityNames(), activities);
         saveRecentActivityNames(recent);
-        renderCalendar(workouts, activities);
+        renderCalendar(workouts, activities, stretches);
         hideError();
         setEmptyState(workouts.length === 0 && activities.length === 0);
     } catch (err) {
         console.error('Failed to load activity calendar:', err);
-        renderCalendar([], []);
+        renderCalendar([], [], []);
         setEmptyState(true);
     }
 }
@@ -100,14 +101,15 @@ function mergeRecentWithKnown(recent, activities) {
     return ordered.slice(0, RECENT_LIMIT);
 }
 
-function renderCalendar(workouts, activities) {
+function renderCalendar(workouts, activities, stretches) {
     const workoutTypesByDay = workoutTypesForDay(workouts);
     const activityNamesByDay = activityNamesForDay(activities);
+    const stretchDays = stretchCompletionDays(stretches);
     const days = buildDayWindow(CALENDAR_DAYS);
-    gridEl.innerHTML = days.map((date) => dayCellHTML(date, workoutTypesByDay, activityNamesByDay)).join('');
+    gridEl.innerHTML = days.map((date) => dayCellHTML(date, workoutTypesByDay, activityNamesByDay, stretchDays)).join('');
 }
 
-function dayCellHTML(date, workoutTypesByDay, activityNamesByDay) {
+function dayCellHTML(date, workoutTypesByDay, activityNamesByDay, stretchDays) {
     const key = toDayKey(date);
     const workoutTypes = workoutTypesByDay.get(key) || [];
     const activityNames = activityNamesByDay.get(key) || [];
@@ -117,13 +119,18 @@ function dayCellHTML(date, workoutTypesByDay, activityNamesByDay) {
     const activityMarkers = activityNames.slice(0, 4).map((name) => (
         `<span class="calendar-marker" style="background:${getActivityColor(name)}" title="${escapeHtml(name)}"></span>`
     )).join('');
-    const hasAny = workoutTypes.length > 0 || activityNames.length > 0;
+    const hasStretch = stretchDays.has(key);
+    const stretchMarker = hasStretch
+        ? '<span class="calendar-marker calendar-marker-stretch" title="Stretching"></span>'
+        : '';
+    const hasAny = workoutTypes.length > 0 || activityNames.length > 0 || hasStretch;
     return `
         <button class="calendar-day calendar-day-zoom ${hasAny ? 'calendar-day-has-data' : ''}" data-day-key="${key}">
             <span class="calendar-day-num">${date.getDate()}</span>
             <span class="calendar-marker-row">
                 ${workoutMarkers}
                 ${activityMarkers}
+                ${stretchMarker}
             </span>
         </button>
     `;
@@ -261,6 +268,16 @@ function workoutTypesForDay(items) {
         byDay.set(key, list);
     }
     return byDay;
+}
+
+function stretchCompletionDays(items) {
+    const daySet = new Set();
+    for (const item of items || []) {
+        const key = toDayKey(item.timestamp);
+        if (!key) continue;
+        daySet.add(key);
+    }
+    return daySet;
 }
 
 function toDayKey(date) {

@@ -4,6 +4,7 @@ import {
     HEALTH_COLLECTION,
     HEALTH_METRIC_META_COLLECTION,
     ACTIVITY_COLLECTION,
+    STRETCH_COLLECTION,
 } from './config.js';
 import { getUsername } from './setup.js';
 import { resolveMachineType } from './machineType.js';
@@ -106,6 +107,32 @@ export async function saveActivity(activityName, activityDate) {
     return ref.id;
 }
 
+/**
+ * Save a stretch-set completion to Firestore.
+ * @param {number} setIndex - 0, 1, or 2
+ * @param {Date} stretchDate
+ * @returns {Promise<string>} The new document ID
+ */
+export async function saveStretch(setIndex, stretchDate) {
+    ensureReady();
+    const username = getUsername();
+    if (!username) throw new Error('No username set');
+    if (!(stretchDate instanceof Date) || Number.isNaN(stretchDate.getTime())) {
+        throw new Error('Invalid stretch date');
+    }
+
+    const now = firebase.firestore.Timestamp.fromDate(new Date());
+    const doc = {
+        username,
+        setIndex,
+        timestamp: firebase.firestore.Timestamp.fromDate(stretchDate),
+        createdAt: now,
+    };
+
+    const ref = await db.collection(STRETCH_COLLECTION).add(doc);
+    return ref.id;
+}
+
 // --- Read --------------------------------------------------------------
 
 /**
@@ -161,6 +188,45 @@ export async function queryActivities(since) {
     } catch (err) {
         if (isPermissionDenied(err)) {
             console.warn('Activities query not permitted by Firestore rules');
+            return [];
+        }
+        throw err;
+    }
+}
+
+/**
+ * Query stretch completions for the current user, optionally filtered by date range.
+ * @param {Date|null} since - only return stretches after this date (null = all)
+ * @returns {Promise<Array>} Stretch documents sorted newest-first
+ */
+export async function queryStretches(since) {
+    ensureReady();
+    const username = getUsername();
+    if (!username) return [];
+
+    let query = db
+        .collection(STRETCH_COLLECTION)
+        .where('username', '==', username)
+        .orderBy('timestamp', 'desc');
+
+    if (since) {
+        query = query.where('timestamp', '>=', since);
+    }
+
+    try {
+        const snapshot = await query.get();
+        return snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                timestamp: data.timestamp?.toDate() ?? new Date(),
+                createdAt: data.createdAt?.toDate?.() ?? null,
+            };
+        });
+    } catch (err) {
+        if (isPermissionDenied(err)) {
+            console.warn('Stretches query not permitted by Firestore rules');
             return [];
         }
         throw err;

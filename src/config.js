@@ -15,6 +15,7 @@ export const FIRESTORE_COLLECTION = 'workouts';
 export const HEALTH_COLLECTION = 'healthMeasurements';
 export const HEALTH_METRIC_META_COLLECTION = 'healthMetricMeta';
 export const ACTIVITY_COLLECTION = 'activities';
+export const STRETCH_COLLECTION = 'stretches';
 
 export const FIREBASE_CONFIG = {
     apiKey: 'AIzaSyCloRCnxs_2QnXW6ceJysWbcfCt7RAJ5RM',

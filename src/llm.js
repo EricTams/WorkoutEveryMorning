@@ -11,7 +11,7 @@ const SYSTEM_PROMPT = `You are a workout data extractor. The user will send a ph
 Extract the workout summary and return ONLY a JSON object with these exact keys:
 
 {
-  "machineType": <string — best guess: "eliptical" | "treadmill" | "cycle">,
+  "machineType": <string — best guess: "eliptical" | "treadmill" | "cycle" | "hiking">,
   "elapsedTimeSeconds": <number — total workout duration in seconds>,
   "calories": <number — total calories burned>,
   "distanceMiles": <number — distance in miles (convert from km if needed)>,
@@ -24,7 +24,7 @@ Extract the workout summary and return ONLY a JSON object with these exact keys:
 Rules:
 - Return ONLY valid JSON, no markdown, no explanation.
 - Use null for any field you cannot read from the photo.
-- For machineType, return your best guess as one of: "eliptical", "treadmill", "cycle".
+- For machineType, return your best guess as one of: "eliptical", "treadmill", "cycle", "hiking".
 - Convert metric units to imperial (km → miles, km/h → mph, meters → feet).
 - For elapsed time, convert "MM:SS" or "H:MM:SS" format into total seconds.
 - For pace like "8:51 / Mile", convert to total seconds (8*60 + 51 = 531).`;

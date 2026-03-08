@@ -98,6 +98,7 @@
                 <button class="home-action btn btn-primary" data-target-screen="screen-log">Add Cardio</button>
                 <button class="home-action btn btn-secondary" data-target-screen="screen-workout">Add Workout</button>
                 <button class="home-action btn btn-primary" data-target-screen="screen-health">Add Measurements</button>
+                <button class="home-action btn btn-primary" data-target-screen="screen-stretching">Stretching</button>
             </div>
         </section>
 
@@ -191,6 +192,10 @@
                             <span class="calendar-marker calendar-marker-health"></span>
                             Measurements
                         </span>
+                        <span class="calendar-legend-item">
+                            <span class="calendar-marker calendar-marker-stretch"></span>
+                            Stretches
+                        </span>
                     </p>
                 </div>
 
@@ -231,6 +236,7 @@
                         <option value="eliptical">Eliptical</option>
                         <option value="treadmill">Treadmill</option>
                         <option value="cycle">Cycle</option>
+                        <option value="hiking">Hiking</option>
                     </select>
                 </div>
                 <div class="date-picker-row">
@@ -275,14 +281,18 @@
                     <span class="calendar-marker calendar-marker-workout-c"></span>
                     Workouts
                 </span>
-                <span class="calendar-legend-item">
-                    <span class="calendar-marker calendar-marker-activity-a"></span>
-                    <span class="calendar-marker calendar-marker-activity-b"></span>
-                    <span class="calendar-marker calendar-marker-activity-c"></span>
-                    Activities
-                </span>
-            </p>
-            <button class="btn btn-secondary" data-target-screen="screen-dashboard">Back to Dashboard</button>
+                    <span class="calendar-legend-item">
+                        <span class="calendar-marker calendar-marker-activity-a"></span>
+                        <span class="calendar-marker calendar-marker-activity-b"></span>
+                        <span class="calendar-marker calendar-marker-activity-c"></span>
+                        Activities
+                    </span>
+                    <span class="calendar-legend-item">
+                        <span class="calendar-marker calendar-marker-stretch"></span>
+                        Stretches
+                    </span>
+                </p>
+                <button class="btn btn-secondary" data-target-screen="screen-dashboard">Back to Dashboard</button>
         </section>
 
         <!-- History Screen -->
@@ -370,6 +380,32 @@
                 </div>
             </div>
             <p id="health-empty" class="empty-text hidden">No health measurements yet.</p>
+        </section>
+
+        <!-- Stretching Screen -->
+        <section id="screen-stretching" class="screen hidden">
+            <div id="stretch-idle">
+                <div class="dashboard-header">
+                    <h2>Stretching Routine</h2>
+                    <p id="stretch-next-label" class="dashboard-subtitle">Next Up: Set A</p>
+                </div>
+                <div id="stretch-exercise-list" class="stretch-exercise-list"></div>
+                <div class="date-picker-row">
+                    <label for="stretch-date">Date</label>
+                    <input type="date" id="stretch-date" class="input">
+                </div>
+                <button id="stretch-save-btn" class="btn btn-primary">Mark Complete</button>
+            </div>
+            <div id="stretch-saved" class="capture-state hidden">
+                <div class="saved-check">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <p>Stretches logged!</p>
+                <button id="stretch-another-btn" class="btn btn-primary">Back to Stretching</button>
+            </div>
         </section>
 
         <!-- Workout Placeholder Screen -->
